@@ -1,16 +1,136 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>My Portfolio</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nathan Jimenez — CS180 Computational Photography</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
 </head>
 <body>
-    <h1>Welcome to My CS180 Portfolio!</h1>
-    <a href="./1/index.html">Project 1</a>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="film-bars">
+      <span style="background: var(--red)"></span>
+      <span style="background: var(--yellow)"></span>
+      <span style="background: var(--blue)"></span>
+    </div>
+
+    <div class="name-block">
+      <div class="name">NATHAN<br>JIMENEZ</div>
+      <div class="course">CS180 FA26</div>
+    </div>
+
+    <nav class="project-nav">
+      <a href="projects/01/" class="active">01</a>
+      <span class="locked">02</span>
+      <span class="locked">03</span>
+      <span class="locked">04</span>
+      <span class="locked">05</span>
+      <span class="locked">06</span>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="#about">about</a>
+      <a href="https://github.com/NathanJim17" target="_blank" rel="noopener">github ↗</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <h1 class="page-title">PROJECTS</h1>
+
+    <div class="project-grid">
+
+      <a class="cam-card cam-yellow" href="projects/01/">
+        <div class="cam-top">
+          <div class="lens"><div class="lens-inner"></div></div>
+          <div class="viewfinder"></div>
+          <div class="shutter"></div>
+        </div>
+        <div class="film-edge film-edge-yellow"></div>
+        <div class="cam-title">Friends with<br>Your Camera</div>
+        <div class="cam-footer">
+          <span class="cam-num">01</span>
+          <span class="cam-cta">SHOOT →</span>
+        </div>
+      </a>
+
+      <!-- Projects 02–06: not yet built. Dashed placeholder cards, inert. -->
+      <div class="cam-card placeholder">
+        <div class="cam-top">
+          <div class="lens"><div class="lens-inner"></div></div>
+          <div class="viewfinder"></div>
+          <div class="shutter"></div>
+        </div>
+        <div class="film-edge"></div>
+        <div class="cam-title">02 unopened</div>
+        <div class="cam-footer">
+          <span class="cam-num">02</span>
+          <span class="cam-cta">coming soon</span>
+        </div>
+      </div>
+
+      <div class="cam-card placeholder">
+        <div class="cam-top">
+          <div class="lens"><div class="lens-inner"></div></div>
+          <div class="viewfinder"></div>
+          <div class="shutter"></div>
+        </div>
+        <div class="film-edge"></div>
+        <div class="cam-title">03 unopened</div>
+        <div class="cam-footer">
+          <span class="cam-num">03</span>
+          <span class="cam-cta">coming soon</span>
+        </div>
+      </div>
+
+      <div class="cam-card placeholder">
+        <div class="cam-top">
+          <div class="lens"><div class="lens-inner"></div></div>
+          <div class="viewfinder"></div>
+          <div class="shutter"></div>
+        </div>
+        <div class="film-edge"></div>
+        <div class="cam-title">04 unopened</div>
+        <div class="cam-footer">
+          <span class="cam-num">04</span>
+          <span class="cam-cta">coming soon</span>
+        </div>
+      </div>
+
+      <div class="cam-card placeholder">
+        <div class="cam-top">
+          <div class="lens"><div class="lens-inner"></div></div>
+          <div class="viewfinder"></div>
+          <div class="shutter"></div>
+        </div>
+        <div class="film-edge"></div>
+        <div class="cam-title">05 unopened</div>
+        <div class="cam-footer">
+          <span class="cam-num">05</span>
+          <span class="cam-cta">coming soon</span>
+        </div>
+      </div>
+
+      <div class="cam-card placeholder">
+        <div class="cam-top">
+          <div class="lens"><div class="lens-inner"></div></div>
+          <div class="viewfinder"></div>
+          <div class="shutter"></div>
+        </div>
+        <div class="film-edge"></div>
+        <div class="cam-title">06 unopened</div>
+        <div class="cam-footer">
+          <span class="cam-num">06</span>
+          <span class="cam-cta">coming soon</span>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</div>
 </body>
 </html>

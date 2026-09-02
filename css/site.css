@@ -1,0 +1,514 @@
+/* ============================================================
+   CS180 Computational Photography — site tokens & components
+   ============================================================ */
+
+:root {
+  --red: #ed1c24;
+  --yellow: #ffb600;
+  --blue: #1f4ebf;
+  --black: #1a1a1a;
+  --bg: #fffdf6;
+  --white: #fff;
+
+  --body-copy: #555;
+  --slot-label: #777;
+  --disabled: #bbb;
+
+  --yellow-dark: #d99b00;
+  --red-dark: #b0141b;
+  --blue-dark: #16389a;
+
+  --ph-bg: #efece4;
+  --ph-border: #bbb6ab;
+  --ph-dashed: #cfcac0;
+  --ph-text: #b3aea3;
+
+  --slot-stripe-1: #d9d5cb;
+  --slot-stripe-2: #eae7de;
+
+  --sidebar-w: 200px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--black);
+  font-family: 'Space Mono', monospace;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ---------------- Sidebar ---------------- */
+
+.sidebar {
+  width: var(--sidebar-w);
+  flex: 0 0 var(--sidebar-w);
+  background: var(--black);
+  color: var(--white);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px 20px;
+}
+
+.film-bars {
+  display: flex;
+  gap: 6px;
+  height: 10px;
+}
+.film-bars span {
+  flex: 1;
+  border-radius: 1px;
+}
+
+.name-block .name {
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.15;
+}
+.name-block .course {
+  font-weight: 400;
+  font-size: 14px;
+  opacity: .6;
+  margin-top: 4px;
+}
+
+.project-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-weight: 400;
+  font-size: 16px;
+}
+.project-nav a,
+.project-nav span {
+  display: block;
+}
+.project-nav .active {
+  color: var(--yellow);
+  font-weight: 700;
+}
+.project-nav .dim {
+  opacity: .7;
+}
+.project-nav .locked {
+  opacity: .35;
+}
+
+.section-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-weight: 400;
+  font-size: 15px;
+}
+.section-nav a {
+  opacity: .6;
+}
+.section-nav a.active {
+  color: var(--yellow);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.back-index {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--yellow);
+}
+
+.project-label {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: .1em;
+  opacity: .8;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  opacity: .5;
+}
+
+.next-link {
+  margin-top: auto;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--yellow);
+}
+
+/* ---------------- Main column ---------------- */
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 40px 36px;
+}
+
+.main h1.page-title {
+  font-weight: 700;
+  font-size: 30px;
+  letter-spacing: .16em;
+  margin: 0 0 32px;
+}
+
+.project-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+
+/* ---------------- Camera card ---------------- */
+
+.cam-card {
+  display: block;
+  border: 1.5px solid var(--black);
+  border-radius: 10px;
+  padding: 18px;
+  transition: transform .15s ease;
+}
+.cam-card:focus-visible {
+  outline: 2px solid var(--black);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cam-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 14px rgba(0,0,0,.15);
+  }
+}
+
+.cam-yellow { background: var(--yellow); color: var(--black); }
+.cam-red    { background: var(--red);    color: var(--white); }
+.cam-blue   { background: var(--blue);   color: var(--white); }
+
+.cam-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.lens {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: var(--black);
+  border: 6px solid #999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cam-yellow .lens { border-color: var(--yellow-dark); }
+.cam-red    .lens { border-color: var(--red-dark); }
+.cam-blue   .lens { border-color: var(--blue-dark); }
+
+.lens-inner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #3a3a3a;
+}
+
+.viewfinder {
+  width: 44px;
+  height: 28px;
+  background: var(--white);
+  border: 1.5px solid var(--black);
+  border-radius: 2px;
+}
+
+.shutter {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--black);
+}
+.cam-yellow .shutter { background: var(--red); }
+.cam-red    .shutter,
+.cam-blue   .shutter { background: var(--yellow); }
+
+.film-edge {
+  height: 16px;
+  margin: 18px 0 14px;
+  border-radius: 2px;
+}
+.film-edge-yellow {
+  background: repeating-linear-gradient(90deg,
+    var(--red) 0 16px, var(--blue) 16px 32px, var(--white) 32px 48px);
+}
+.film-edge-red {
+  background: repeating-linear-gradient(90deg,
+    var(--yellow) 0 16px, var(--blue) 16px 32px, var(--white) 32px 48px);
+}
+.film-edge-blue {
+  background: repeating-linear-gradient(90deg,
+    var(--red) 0 16px, var(--yellow) 16px 32px, var(--white) 32px 48px);
+}
+
+.cam-title {
+  font-weight: 700;
+  font-size: 21px;
+  line-height: 1.15;
+}
+
+.cam-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+.cam-num {
+  font-weight: 400;
+  font-size: 14px;
+  opacity: .8;
+}
+.cam-cta {
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--black);
+  color: var(--white);
+  padding: 4px 8px;
+  border-radius: 2px;
+}
+
+/* ---------------- Placeholder card ---------------- */
+
+.cam-card.placeholder {
+  background: var(--ph-bg);
+  border: 1.5px dashed var(--ph-border);
+  color: var(--ph-text);
+  cursor: default;
+  pointer-events: none;
+}
+.placeholder .lens {
+  background: transparent;
+  border: 3px dashed var(--ph-dashed);
+}
+.placeholder .lens-inner {
+  background: transparent;
+  border: 1.5px dashed var(--ph-dashed);
+}
+.placeholder .viewfinder {
+  background: transparent;
+  border: 1.5px dashed var(--ph-dashed);
+}
+.placeholder .shutter {
+  background: transparent;
+  border: 1.5px dashed var(--ph-dashed);
+}
+.placeholder .film-edge {
+  background: none;
+  border-top: 1px dashed var(--ph-dashed);
+  height: 0;
+  margin: 18px 0 14px;
+}
+.placeholder .cam-cta {
+  background: transparent;
+  color: var(--ph-text);
+  border: 1px dashed var(--ph-dashed);
+}
+
+/* ---------------- Project hero ---------------- */
+
+.hero {
+  border-bottom: 1.5px solid var(--black);
+  padding: 32px 36px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.hero-yellow { background: var(--yellow); }
+.hero-red    { background: var(--red); color: var(--white); }
+.hero-blue   { background: var(--blue); color: var(--white); }
+
+.hero .lens {
+  width: 88px;
+  height: 88px;
+  border-width: 8px;
+  flex: 0 0 auto;
+}
+
+.hero-eyebrow {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: .18em;
+  opacity: .7;
+}
+.hero-title {
+  font-weight: 700;
+  font-size: 32px;
+  line-height: 1.2;
+  margin-top: 4px;
+}
+
+.summary {
+  padding: 28px 36px;
+  border-bottom: 1px solid rgba(0,0,0,.12);
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--body-copy);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 32px 36px;
+}
+
+.part-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.part-chip {
+  font-weight: 700;
+  font-size: 16px;
+  padding: 6px 12px;
+  background: var(--black);
+  color: var(--white);
+  border-radius: 2px;
+}
+.part-title {
+  font-weight: 700;
+  font-size: 22px;
+}
+
+.part-answer {
+  margin-top: 18px;
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--body-copy);
+}
+
+.part-caption {
+  margin-top: 10px;
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--slot-label);
+}
+
+/* ---------------- Film strip ---------------- */
+
+.film-strip {
+  background: var(--black);
+  padding: 10px 12px;
+  border-radius: 4px;
+}
+.perf {
+  height: 18px;
+  background: repeating-linear-gradient(90deg,
+    var(--white) 0 18px, var(--black) 18px 32px);
+}
+.frames {
+  display: flex;
+  gap: 14px;
+  padding: 10px 0;
+}
+.frame {
+  flex: 1;
+  min-width: 0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.frame.slot {
+  background: repeating-linear-gradient(135deg,
+    var(--slot-stripe-1) 0 12px, var(--slot-stripe-2) 12px 24px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px;
+}
+.frame.slot span {
+  font-size: 14px;
+  color: var(--slot-label);
+}
+
+.frame-104 { height: 208px; }
+.frame-88  { height: 176px; }
+.frame-180 { height: 360px; }
+
+/* ---------------- Page footer nav ---------------- */
+
+.page-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 22px 36px;
+  border-top: 1.5px solid var(--black);
+  font-weight: 700;
+  font-size: 16px;
+}
+.page-footer .disabled {
+  color: var(--disabled);
+  pointer-events: none;
+}
+
+/* ---------------- Responsive ---------------- */
+
+@media (max-width: 900px) {
+  .layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+  }
+  .film-bars {
+    width: 60px;
+    height: auto;
+    flex-direction: column;
+    align-self: stretch;
+  }
+  .name-block { margin-right: auto; }
+  .sidebar-footer,
+  .next-link {
+    margin-top: 0;
+    margin-left: auto;
+  }
+  .project-nav {
+    flex-direction: row;
+    gap: 16px;
+  }
+  .section-nav {
+    flex-direction: row;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .project-grid {
+    grid-template-columns: 1fr;
+  }
+  .frames {
+    flex-direction: column;
+  }
+  .frame-104, .frame-88 {
+    height: auto;
+    min-height: 200px;
+  }
+}

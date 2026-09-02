@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project 01 — Becoming Friends with Your Camera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../css/site.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="film-bars">
+      <span style="background: var(--red)"></span>
+      <span style="background: var(--yellow)"></span>
+      <span style="background: var(--blue)"></span>
+    </div>
+
+    <a href="../../" class="back-index">← INDEX</a>
+    <div class="project-label">PROJECT 01</div>
+
+    <nav class="section-nav">
+      <a href="#part-1" class="active">· selfie</a>
+      <a href="#part-2">· building</a>
+      <a href="#part-3">· dolly zoom</a>
+    </nav>
+
+    <div class="next-link" style="visibility:hidden">next 02 →</div>
+  </aside>
+
+  <main class="main" style="padding:0">
+
+    <div class="hero hero-yellow">
+      <div class="lens"><div class="lens-inner"></div></div>
+      <div>
+        <div class="hero-eyebrow">PROJECT 01</div>
+        <div class="hero-title">Becoming Friends<br>with Your Camera</div>
+      </div>
+    </div>
+
+    <div class="summary">
+      This project explores how focal length and camera distance change the way a face and a
+      building are rendered — replace with your own summary once the write-up is final.
+    </div>
+
+    <div class="body">
+
+      <section id="part-1">
+        <div class="part-heading">
+          <span class="part-chip">PART 1</span>
+          <span class="part-title">Selfie: wrong vs. right</span>
+        </div>
+        <div class="film-strip">
+          <div class="perf"></div>
+          <div class="frames">
+            <div class="frame slot frame-104"><span>close-up, 24mm</span></div>
+            <div class="frame slot frame-104"><span>back + zoom, 77mm</span></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Placeholder answer — explain why the zoomed-in, stepped-back portrait looks more
+          flattering than the close-up wide shot.
+        </p>
+      </section>
+
+      <section id="part-2">
+        <div class="part-heading">
+          <span class="part-chip">PART 2</span>
+          <span class="part-title">Architectural compression</span>
+        </div>
+        <div class="film-strip">
+          <div class="perf"></div>
+          <div class="frames">
+            <div class="frame slot frame-88"><span>zoomed, far</span></div>
+            <div class="frame slot frame-88"><span>wide, close</span></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Placeholder answer — describe the compression effect between the two shots.
+        </p>
+      </section>
+
+      <section id="part-3">
+        <div class="part-heading">
+          <span class="part-chip">PART 3</span>
+          <span class="part-title">Dolly zoom</span>
+        </div>
+        <div class="film-strip">
+          <div class="perf"></div>
+          <div class="frames">
+            <div class="frame slot frame-180"><span>dolly zoom GIF</span></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-caption">
+          how I shot it — camera positions, focal lengths, frame count
+        </p>
+      </section>
+
+    </div>
+
+    <div class="page-footer">
+      <span class="disabled">← PREV</span>
+      <span>NEXT: PROKUDIN-GORSKII →</span>
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+  const links = document.querySelectorAll('.section-nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = '#' + entry.target.id;
+        links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === id));
+      }
+    });
+  }, { rootMargin: '-40% 0px -50% 0px' });
+  sections.forEach(s => s && observer.observe(s));
+</script>
+</body>
+</html>
