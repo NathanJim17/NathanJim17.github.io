@@ -322,11 +322,20 @@ a { color: inherit; text-decoration: none; }
 /* ---------------- Project hero ---------------- */
 
 .hero {
+  position: relative;
   border-bottom: 1.5px solid var(--black);
   padding: 32px 36px;
   display: flex;
   align-items: center;
   gap: 28px;
+}
+.hero-url {
+  position: absolute;
+  right: 36px;
+  bottom: 12px;
+  font-weight: 400;
+  font-size: 13px;
+  opacity: .6;
 }
 .hero-yellow { background: var(--yellow); }
 .hero-red    { background: var(--red); color: var(--white); }
