@@ -406,8 +406,10 @@ a { color: inherit; text-decoration: none; }
 
 .film-strip {
   background: var(--black);
-  padding: 6px 8px;
+  padding: 5px 6px;
   border-radius: 3px;
+  max-width: 600px;
+  margin: 0;
 }
 .perf {
   height: 10px;
@@ -416,21 +418,22 @@ a { color: inherit; text-decoration: none; }
 }
 .frames {
   display: flex;
-  gap: 8px;
+  gap: 14px;
   padding: 6px 0;
 }
 .frame {
   flex: 1;
   min-width: 0;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
   border-radius: 4px;
   overflow: hidden;
+  background: var(--black);
 }
 .frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 30%;
+  object-position: center 35%;
   display: block;
 }
 .frame.slot {
