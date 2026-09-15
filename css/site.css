@@ -340,6 +340,9 @@ a { color: inherit; text-decoration: none; }
 .hero-yellow { background: var(--yellow); }
 .hero-red    { background: var(--red); color: var(--white); }
 .hero-blue   { background: var(--blue); color: var(--white); }
+.hero-yellow .lens { border-color: var(--yellow-dark); }
+.hero-red    .lens { border-color: var(--red-dark); }
+.hero-blue   .lens { border-color: var(--blue-dark); }
 
 .hero .lens {
   width: 88px;
@@ -457,6 +460,37 @@ a { color: inherit; text-decoration: none; }
 }
 .frame.slot span {
   font-size: 14px;
+  color: var(--slot-label);
+}
+
+/* ---------------- Result grid (contact-sheet style) ---------------- */
+
+.frames.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 14px;
+}
+.result-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.result-tile .frame {
+  aspect-ratio: 4 / 3;
+}
+.result-label {
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255,255,255,.55);
+  text-align: center;
+}
+.result-label b {
+  color: rgba(255,255,255,.85);
+}
+
+.offsets-note {
+  margin-top: 9px;
+  font-size: 13px;
   color: var(--slot-label);
 }
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Project 01 — Becoming Friends with Your Camera</title>
+<title>Project 01: Colorizing the Prokudin-Gorskii Collection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../../css/site.css">
@@ -22,9 +22,11 @@
     <div class="project-label">PROJECT 01</div>
 
     <nav class="section-nav">
-      <a href="#part-1" class="active">· selfie</a>
-      <a href="#part-2">· building</a>
-      <a href="#part-3">· dolly zoom</a>
+      <a href="#part-approach" class="active">· approach</a>
+      <a href="#part-single">· single-scale</a>
+      <a href="#part-pyramid">· pyramid</a>
+      <a href="#part-custom">· custom photos</a>
+      <a href="#part-failures">· failures</a>
     </nav>
 
     <div class="next-link" style="visibility:hidden">next 02 →</div>
@@ -32,87 +34,198 @@
 
   <main class="main" style="padding:0">
 
-    <div class="hero hero-yellow">
+    <div class="hero hero-red">
       <div class="lens"><div class="lens-inner"></div></div>
       <div>
         <div class="hero-eyebrow">PROJECT 01</div>
-        <div class="hero-title">Becoming Friends<br>with Your Camera</div>
+        <div class="hero-title">Colorizing the<br>Prokudin-Gorskii Collection</div>
       </div>
       <span class="hero-url">nathanjim17.github.io</span>
     </div>
 
     <div class="summary">
-      This project explores how focal length and camera distance change the way a face and a
-      building are rendered.
+      Sergei Prokudin-Gorskii shot each scene three times through red, green, and blue filters on
+      glass plates. Stacking the three channels back together recovers a color photo, but the
+      plates shifted slightly between exposures, so each channel has to be aligned before they
+      line up. This page covers a single-scale search on the low-res examples, then a
+      coarse-to-fine image pyramid for the full-size glass plates.
     </div>
 
     <div class="body">
 
-      <section id="part-1">
+      <section id="part-approach">
+        <div class="part-heading">
+          <span class="part-chip">APPROACH</span>
+          <span class="part-title">Alignment method</span>
+        </div>
+        <p class="part-answer">
+          Each glass plate is one tall grayscale image holding three exposures in a row: blue,
+          green, red. The pipeline splits every plate into equal thirds, then lines up the green
+          and red channels with the fixed blue channel. It does this by testing every integer
+          <code>(dy, dx)</code> shift in a &plusmn;15px window with <code>np.roll</code>, scoring
+          each one with normalized cross-correlation (NCC) on a cropped patch so the wraparound
+          edge from <code>np.roll</code> doesn't throw off the score. NCC was used instead of
+          L2/SSD because it adjusts for brightness and contrast differences between the R/G/B
+          filters, which don't always expose the same way.
+        </p>
+        <p class="part-answer">
+          &plusmn;15px works for the low-res JPEGs, but the full-resolution TIFs need true
+          offsets as large as 180px. Brute-forcing that at full resolution isn't possible with a
+          fixed window, and it's also too slow (a plain full-image search took over 4 minutes
+          for one channel). <code>align_pyramid()</code> solves both problems. It shrinks the
+          image by half repeatedly until it's under about 400px on its short side, aligns at
+          that small scale with <code>align_single_scale()</code> (where &plusmn;15px covers a
+          much bigger area), then works back up, doubling the estimate and refining it with
+          another small search at each step.
+        </p>
+        <p class="part-answer">
+          For speed, <code>align_single_scale()</code> doesn't roll the full image for each of
+          the roughly 961 candidate shifts. Instead it cuts out one small, centered patch up
+          front, with extra padding, and reads every candidate shift straight out of that patch
+          through array slicing. This gives the same result as rolling and cropping the whole
+          image, but only for shifts inside the search window. It cut one full-resolution
+          alignment from about 4 minutes to under a minute.
+        </p>
+      </section>
+
+      <section id="part-single">
         <div class="part-heading">
           <span class="part-chip">PART 1</span>
-          <span class="part-title">Selfie: wrong vs. right</span>
+          <span class="part-title">Single-scale alignment</span>
         </div>
         <div class="film-strip">
           <div class="perf"></div>
           <div class="frames">
-            <div class="frame"><img src="img/part1-close-up.jpg" alt="Close-up selfie, 24mm"></div>
-            <div class="frame"><img src="img/part1-back-zoom.jpg" alt="Stepped back and zoomed selfie, 77mm" style="object-position: center 60%"></div>
+            <div class="result-tile">
+              <div class="frame"><img src="img/cathedral.jpg" alt="cathedral, aligned"></div>
+              <div class="result-label">cathedral.jpg<br><b>G: (5, 2)  R: (12, 3)</b></div>
+            </div>
+            <div class="result-tile">
+              <div class="frame"><img src="img/monastery.jpg" alt="monastery, aligned"></div>
+              <div class="result-label">monastery.jpg<br><b>G: (-3, 2)  R: (3, 2)</b></div>
+            </div>
+            <div class="result-tile">
+              <div class="frame"><img src="img/tobolsk.jpg" alt="tobolsk, aligned"></div>
+              <div class="result-label">tobolsk.jpg<br><b>G: (3, 3)  R: (6, 3)</b></div>
+            </div>
           </div>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          The left photo was shot up close with a small focal length. My nose is noticeably bigger
-          and my face looks narrower, since the features closest to the lens get exaggerated the
-          closer you get. The right photo was shot from further back and zoomed in instead, which
-          keeps proportions close to how a face actually looks in person.
+          All three low-res plates align cleanly with the same fixed &plusmn;15px NCC search and
+          no per-image tuning. Offsets are small (at most 12px) and well inside the search
+          window. No ghosting or fringing remains once the channels are shifted; edges in
+          <em>cathedral</em> and <em>tobolsk</em> line up crisply.
         </p>
       </section>
 
-      <section id="part-2">
+      <section id="part-pyramid">
         <div class="part-heading">
           <span class="part-chip">PART 2</span>
-          <span class="part-title">Architectural compression</span>
+          <span class="part-title">Multi-scale pyramid alignment on all provided glass plates</span>
         </div>
         <div class="film-strip">
           <div class="perf"></div>
-          <div class="frames">
-            <div class="frame"><img src="img/part2-zoomed-far.jpg" alt="Building shot, zoomed in from far away"></div>
-            <div class="frame"><img src="img/part2-wide-close.jpg" alt="Building shot, wide angle from close up"></div>
+          <div class="frames grid">
+            <div class="result-tile"><div class="frame"><img src="img/cathedral.jpg" alt="cathedral, aligned"></div><div class="result-label">cathedral.jpg<br><b>G: (5, 2)  R: (12, 3)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/church.jpg" alt="church, aligned"></div><div class="result-label">church.tif<br><b>G: (24, 4)  R: (58, -4)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/emir.jpg" alt="emir, misaligned"></div><div class="result-label">emir.tif <em>(failure)</em><br><b>G: (48, 24)  R: (47, 6)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/harvesters.jpg" alt="harvesters, aligned"></div><div class="result-label">harvesters.tif<br><b>G: (59, 18)  R: (124, 15)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/icon.jpg" alt="icon, aligned"></div><div class="result-label">icon.tif<br><b>G: (41, 18)  R: (90, 23)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/ilemselga.jpg" alt="ilemselga, aligned"></div><div class="result-label">ilemselga.tif<br><b>G: (41, 7)  R: (132, 11)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/melons.jpg" alt="melons, aligned"></div><div class="result-label">melons.tif<br><b>G: (83, 10)  R: (180, 13)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/monastery.jpg" alt="monastery, aligned"></div><div class="result-label">monastery.jpg<br><b>G: (-3, 2)  R: (3, 2)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/religous_painting.jpg" alt="religious painting, aligned"></div><div class="result-label">religous_painting.tif<br><b>G: (27, 4)  R: (69, 7)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/self_portrait.jpg" alt="self portrait, aligned"></div><div class="result-label">self_portrait.tif<br><b>G: (77, 29)  R: (175, 37)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/siren.jpg" alt="siren, aligned"></div><div class="result-label">siren.tif<br><b>G: (49, -5)  R: (96, -23)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/three_generations.jpg" alt="three generations, aligned"></div><div class="result-label">three_generations.tif<br><b>G: (50, 18)  R: (110, 14)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/tobolsk.jpg" alt="tobolsk, aligned"></div><div class="result-label">tobolsk.jpg<br><b>G: (3, 3)  R: (6, 3)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/wharf.jpg" alt="wharf, aligned"></div><div class="result-label">wharf.tif<br><b>G: (15, -7)  R: (81, -15)</b></div></div>
           </div>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          Shooting from further away and zooming in flattens the building and makes it look almost
-          two-dimensional, with far and near features looking about the same size. Shooting up
-          close and wide does the opposite. It shows real depth, since whatever's closest to the
-          lens gets pulled forward and made more prominent than everything behind it.
+          All 14 provided plates were aligned with the exact same fixed pyramid settings
+          (&plusmn;15px search window per level, downsampling by 2x, stopping once the short
+          side drops below about 400px), with no per-image tuning. True offsets vary a lot: the
+          3 low-res JPEGs get the same result as the single-scale search above, since the
+          pyramid just reduces to one step for them. The full-res TIFs need offsets up to
+          <b>180px</b> (<em>melons.tif</em>, red channel), which a &plusmn;15px search alone
+          could never reach.
+        </p>
+        <p class="part-answer">
+          13 of the 14 plates align cleanly. <em>emir.tif</em> is the one exception;
+          see the <a href="#part-failures">failure analysis</a> below.
         </p>
       </section>
 
-      <section id="part-3">
+      <section id="part-custom">
         <div class="part-heading">
           <span class="part-chip">PART 3</span>
-          <span class="part-title">Dolly zoom</span>
+          <span class="part-title">Custom Prokudin-Gorskii selections</span>
         </div>
         <div class="film-strip">
           <div class="perf"></div>
           <div class="frames">
-            <div class="frame" style="aspect-ratio: 1 / 1"><img src="img/part3-dolly-zoom.gif" alt="Dolly zoom animation"></div>
+            <div class="result-tile"><div class="frame"><img src="img/red_cliff.jpg" alt="red sandstone cliff, aligned"></div><div class="result-label">red_cliff.jpg<br><b>G: (4, 0)  R: (15, -1)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/lake_reflection.jpg" alt="lake reflection, aligned"></div><div class="result-label">lake_reflection.jpg<br><b>G: (-3, 1)  R: (-4, 1)</b></div></div>
+            <div class="result-tile"><div class="frame"><img src="img/hillside_home.jpg" alt="hillside home, aligned"></div><div class="result-label">hillside_home.jpg<br><b>G: (3, 2)  R: (12, 4)</b></div></div>
           </div>
           <div class="perf"></div>
         </div>
-        <p class="part-caption">
-          I shot this with grid mode on, for about 10 frames total, stepping backward while
-          zooming in each time to keep the subject the same size in the grid.
+        <p class="part-answer">
+          Picked from the <a href="https://www.loc.gov/collections/prokudin-gorskii/" target="_blank" rel="noopener">LOC Prokudin-Gorskii collection</a>
+          for content different from the provided set: natural rock, water, and foliage instead
+          of architecture or portraits. All three align cleanly with the same fixed parameters
+          as the rest of the dataset.
+        </p>
+        <p class="part-answer">
+          A fourth plate, a sunset over open water, was tried first and dropped. Almost the
+          whole frame was smooth sky and water, with the only real texture (waves, a thin
+          horizon line, a few boats) in a narrow strip at the bottom, away from where a centered
+          patch looks. With so little to compare, NCC had nothing reliable to match, and the
+          search stayed stuck at the edge of the &plusmn;15px window no matter how wide the
+          window was. It's a low-texture version of the same problem as <em>emir.tif</em> below.
+          It was swapped for <em>hillside_home.jpg</em> instead of fixed, since a general
+          "pick the patch with the most texture" rule tended to pick repetitive regions instead,
+          which made other images worse.
+        </p>
+      </section>
+
+      <section id="part-failures">
+        <div class="part-heading">
+          <span class="part-chip">FAILURES</span>
+          <span class="part-title">Failure analysis</span>
+        </div>
+        <div class="film-strip" style="width:35%;min-width:180px">
+          <div class="perf"></div>
+          <div class="frames"><div class="result-tile"><div class="frame"><img src="img/emir.jpg" alt="emir, misaligned"></div><div class="result-label">emir.tif<br><b>G: (48, 24)  R: (47, 6)</b></div></div></div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          <em>emir.tif</em> is the one plate (of 17) that doesn't align cleanly, even with the
+          same fixed pyramid search used everywhere else. The subject's robe has a dense,
+          repeating floral pattern that covers most of the frame. Normalized cross-correlation
+          only measures how well two patches match. It can't tell a true alignment from one
+          that's shifted by exactly one repeat of the pattern, so a shift that lines up flowers
+          with flowers scores just as well as the real answer.
+        </p>
+        <p class="part-answer">
+          This was checked directly: running the search again with a much larger patch changed
+          the reported shift a lot (the red channel's offset moved from <code>dx=6</code> to
+          <code>dx=44</code>), but the ghosting looked the same either way. If the search window
+          had just been too small, a bigger one would have fixed it. Instead it found a
+          <em>different</em> wrong answer, which shows the problem is the repeating pattern
+          itself, not the search settings. The assignment allows one failed image out of 17, so
+          this is it.
         </p>
       </section>
 
     </div>
 
     <div class="page-footer">
-      <span class="disabled">← PREV</span>
-      <span>NEXT: PROKUDIN-GORSKII →</span>
+      <a href="../00/">← PREV</a>
+      <span class="disabled">NEXT: PROJECT 02</span>
     </div>
 
   </main>
