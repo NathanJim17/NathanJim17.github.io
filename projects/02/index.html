@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project 02: Fun with Filters and Frequencies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../css/site.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="film-bars">
+      <span style="background: var(--red)"></span>
+      <span style="background: var(--yellow)"></span>
+      <span style="background: var(--blue)"></span>
+    </div>
+
+    <a href="../../" class="back-index">← INDEX</a>
+    <div class="project-label">PROJECT 02</div>
+
+    <nav class="section-nav">
+      <a href="#part-1-1" class="active">· 1.1 convolution</a>
+      <a href="#part-1-2">· 1.2 finite diff</a>
+      <a href="#part-1-3">· 1.3 DoG</a>
+    </nav>
+
+    <div class="next-link" style="visibility:hidden">next 03 →</div>
+  </aside>
+
+  <main class="main" style="padding:0">
+
+    <div class="hero hero-blue">
+      <div class="lens"><div class="lens-inner"></div></div>
+      <div>
+        <div class="hero-eyebrow">PROJECT 02</div>
+        <div class="hero-title">Fun with Filters<br>and Frequencies</div>
+      </div>
+      <span class="hero-url">nathanjim17.github.io</span>
+    </div>
+
+    <div class="summary">
+      Part 1 builds up 2D convolution from scratch, then uses it to find edges. It starts with a
+      numpy-only convolution checked against <code>scipy.signal.convolve2d</code>, moves on to
+      finite difference operators for image gradients, and finishes with Gaussian smoothing and
+      Derivative of Gaussian (DoG) filters to get cleaner edges.
+    </div>
+
+    <div class="body">
+
+      <!-- ============================ 1.1 ============================ -->
+      <section id="part-1-1">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.1</span>
+          <span class="part-title">Convolutions from scratch</span>
+        </div>
+        <p class="part-answer">
+          Both versions compute a "same" convolution with zero padding, so the
+          output is the same size as the input. The kernel is first flipped along both axes with
+          <code>np.flip</code> (a 180&deg; rotation). That flip is what makes this convolution
+          rather than correlation. The image is then padded by the kernel's radius,
+          <code>(kh-1)//2</code> rows and <code>(kw-1)//2</code> columns on each side, so every
+          original pixel can sit at the center of the kernel. After padding, the window for
+          output pixel <code>(i, j)</code> is simply <code>padded[i:i+kh, j:j+kw]</code>. Both
+          versions assume odd kernel sizes, which covers every kernel used here.
+        </p>
+        <pre class="code-block"><code>def pad_zeros(im, pad_h, pad_w):
+    new_h = im.shape[0] + 2 * pad_h
+    new_w = im.shape[1] + 2 * pad_w
+    padded_im = np.zeros((new_h, new_w))
+    padded_im[pad_h : pad_h + im.shape[0], pad_w : pad_w + im.shape[1]] = im
+    return padded_im
+
+
+def conv2d_four_loops(im, kernel):
+    flipped_kernel = np.flip(kernel)
+    kh, kw = kernel.shape
+    pad_h = (kh - 1) // 2
+    pad_w = (kw - 1) // 2
+    padded_im = pad_zeros(im, pad_h, pad_w)
+    out = np.zeros(im.shape)
+    for i in range(im.shape[0]):
+        for j in range(im.shape[1]):
+            for kr in range(kh):
+                for kc in range(kw):
+                    out[i, j] += padded_im[i + kr, j + kc] * flipped_kernel[kr, kc]
+    return out
+
+
+def conv2d_two_loops(im, kernel):
+    flipped_kernel = np.flip(kernel)
+    kh, kw = kernel.shape
+    pad_h = (kh - 1) // 2
+    pad_w = (kw - 1) // 2
+    padded_im = pad_zeros(im, pad_h, pad_w)
+    out = np.zeros(im.shape)
+    for i in range(im.shape[0]):
+        for j in range(im.shape[1]):
+            window = padded_im[i : i + kh, j : j + kw]
+            out[i, j] = np.sum(window * flipped_kernel)
+    return out
+
+
+box_filter = np.ones((9, 9)) / 81      # sums to 1, so flat regions keep their brightness
+D_X = np.array([[1, 0, -1]])
+D_Y = D_X.T</code></pre>
+
+        <div class="sub-heading">Results on a selfie (450&times;600, grayscale)</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/selfie_gray.jpg" alt="grayscale selfie"></div><div class="result-label">original<br><b>grayscale</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/selfie_box9.jpg" alt="selfie blurred with 9x9 box filter"></div><div class="result-label">box filter<br><b>9&times;9</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/selfie_Dx.jpg" alt="selfie convolved with Dx"></div><div class="result-label">D<sub>x</sub><br><b>[1, 0, -1]</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/selfie_Dy.jpg" alt="selfie convolved with Dy"></div><div class="result-label">D<sub>y</sub><br><b>[1, 0, -1]<sup>T</sup></b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The box filter smooths away fine detail such as the hair texture. D<sub>x</sub> responds
+          to vertical edges, where brightness changes left to right: the ceiling beams,
+          vertical window frames and the sides of the face and nose. Horizontal window bars
+          almost disappear. D<sub>y</sub> does the opposite and picks up horizontal edges:
+          the window bars, eyebrows, eyelids, mouth and collar. The derivative images look
+          embossed because they're signed. For display, 0 maps to mid-gray, positive values
+          are lighter and negative values darker.
+        </p>
+
+        <div class="sub-heading">Correctness and runtime vs. scipy</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <tr><th>Kernel</th><th>four loops</th><th>two loops</th><th>scipy</th><th>max |ours &minus; scipy|</th></tr>
+            <tr><td>box 9&times;9</td><td>13.69 s</td><td>1.49 s</td><td>0.048 s</td><td>2.1e-15 / 6.7e-16</td></tr>
+            <tr><td>D<sub>x</sub> 1&times;3</td><td>0.69 s</td><td>1.60 s</td><td>0.004 s</td><td>0 / 0</td></tr>
+            <tr><td>D<sub>y</sub> 3&times;1</td><td>0.99 s</td><td>1.66 s</td><td>0.009 s</td><td>0 / 0</td></tr>
+          </table>
+        </div>
+        <p class="part-caption">
+          On the 450&times;600 selfie, compared against
+          <code>convolve2d(mode="same", boundary="fill", fillvalue=0)</code>. Both versions also
+          matched scipy to within 4e-15 on non-square random kernels (3&times;5, 7&times;3).
+        </p>
+        <p class="part-answer">
+          Both match scipy to within floating-point rounding. For the 9&times;9 box, two loops is
+          ~9&times; faster: the 81 multiply-adds run in numpy's compiled code instead of
+          Python. For the 3-tap D<sub>x</sub>/D<sub>y</sub> kernels, four loops actually
+          won. Two loops pays a fixed per-pixel overhead (slicing, temp array,
+          <code>np.sum</code>) that costs more than 3 plain multiplies. Scipy wins everywhere
+          because the whole convolution is compiled.
+        </p>
+        <p class="part-answer">
+          Boundary handling. Zero padding treats everything outside the image as black.
+          The box filter darkens the border (border mean 0.57 &rarr; 0.32), and
+          D<sub>x</sub>/D<sub>y</sub> see a fake edge where the image meets the padding, about
+          20&times; stronger than a typical real edge (0.66 vs. 0.033). Parts 1.2 and 1.3 avoid
+          this with scipy's <code>boundary="symm"</code>, which mirrors the image instead.
+        </p>
+      </section>
+
+      <!-- ============================ 1.2 ============================ -->
+      <section id="part-1-2">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.2</span>
+          <span class="part-title">Finite difference operator</span>
+        </div>
+        <p class="part-answer">
+          The cameraman image is convolved with D<sub>x</sub> and D<sub>y</sub> to get the
+          partial derivatives. At each pixel, <code>(dx, dy)</code> is the gradient vector, and
+          its length <code>sqrt(dx&sup2; + dy&sup2;)</code> is the gradient magnitude. That's the
+          edge strength in any direction. Thresholding the magnitude
+          (<code>mag &gt; t</code>) gives a binary edge image. All convolutions here use
+          <code>boundary="symm"</code>.
+        </p>
+        <div class="film-strip wide">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/cameraman.png" alt="cameraman original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_cameraman_dx.png" alt="cameraman dx"></div><div class="result-label">&part;/&part;x<br><b>D<sub>x</sub></b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_cameraman_dy.png" alt="cameraman dy"></div><div class="result-label">&part;/&part;y<br><b>D<sub>y</sub></b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_cameraman_mag.png" alt="cameraman gradient magnitude"></div><div class="result-label">gradient<br><b>magnitude</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+
+        <div class="sub-heading">Choosing the threshold</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_cameraman_edges_t0.15.png" alt="edges at threshold 0.15"></div><div class="result-label">t = 0.15</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/p12_cameraman_edges_t0.20.png" alt="edges at threshold 0.20, chosen"></div><div class="result-label"><b>t = 0.20 (chosen)</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_cameraman_edges_t0.25.png" alt="edges at threshold 0.25"></div><div class="result-label">t = 0.25</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <tr><th></th><th>t = 0.15</th><th>t = 0.20</th><th>t = 0.25</th></tr>
+            <tr><td>Cameraman + camera</td><td>solid, extra face/coat detail</td><td>solid</td><td>solid</td></tr>
+            <tr><td>Tripod legs</td><td>continuous</td><td>continuous</td><td>mostly, small gaps</td></tr>
+            <tr><td>Dome</td><td>full arc</td><td>most of the arc</td><td>right fragment only</td></tr>
+            <tr><td>Horizon / building bases</td><td>clearly traced</td><td>partly</td><td>mostly gone</td></tr>
+            <tr><td>Grass noise</td><td>heavy speckle, bottom third</td><td>moderate, very bottom</td><td>light</td></tr>
+          </table>
+        </div>
+        <p class="part-answer">
+          I chose t = 0.20: it keeps the subject, tripod and most background structure
+          while removing most grass noise. No threshold is perfect, because grass texture and the
+          faint buildings have similar gradient magnitudes. This motivates smoothing in 1.3.
+        </p>
+        <p class="part-answer">
+          Note: the thin frame in the edge images comes from a 1-pixel semi-transparent
+          border in the provided <code>cameraman.png</code>, not from convolution padding.
+        </p>
+      </section>
+
+      <!-- ============================ 1.3 ============================ -->
+      <section id="part-1-3">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.3</span>
+          <span class="part-title">Derivative of Gaussian (DoG) filter</span>
+        </div>
+        <p class="part-answer">
+          The 9&times;9 Gaussian G is the outer product of <code>cv2.getGaussianKernel(9, 1.5)</code>
+          with itself. Method 1 blurs the image with G, then runs the 1.2 pipeline.
+          Method 2 builds the DoG filters G &#8859; D<sub>x</sub> and G &#8859; D<sub>y</sub>
+          (<code>mode="full"</code>, zero fill, so the whole filter is kept) and convolves the
+          image with each one once.
+        </p>
+
+        <div class="sub-heading">Method 1: blur, then finite differences</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_blur.png" alt="Gaussian blurred cameraman"></div><div class="result-label">blurred<br><b>G(9, &sigma;=1.5)</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_dx1.png" alt="blurred dx"></div><div class="result-label">&part;/&part;x</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_dy1.png" alt="blurred dy"></div><div class="result-label">&part;/&part;y</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_mag1.png" alt="blurred gradient magnitude"></div><div class="result-label">gradient<br><b>magnitude</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+
+        <div class="sub-heading">Method 2: single convolution with DoG filters</div>
+        <div class="film-strip" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit pixel"><img src="img/p13_dog_x.png" alt="DoG x filter"></div><div class="result-label">DoG<sub>x</sub><br><b>G &#8859; D<sub>x</sub></b></div></div>
+            <div class="result-tile"><div class="frame fit pixel"><img src="img/p13_dog_y.png" alt="DoG y filter"></div><div class="result-label">DoG<sub>y</sub><br><b>G &#8859; D<sub>y</sub></b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_mag2.png" alt="DoG gradient magnitude"></div><div class="result-label">gradient<br><b>magnitude</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Each DoG filter looks like a smoothed <code>[1, 0, -1]</code>: a positive (bright)
+          Gaussian lobe next to a negative (dark) one.
+        </p>
+        <p class="part-answer">
+          Verifying the two methods match. Convolution is associative, so
+          (im &#8859; G) &#8859; D = im &#8859; (G &#8859; D). The maximum absolute differences
+          between the methods are:
+        </p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <tr><th></th><th>interior (10 px border excluded)</th><th>whole image</th></tr>
+            <tr><td>dx</td><td>7.1e-16</td><td>&mdash;</td></tr>
+            <tr><td>dy</td><td>7.7e-16</td><td>&mdash;</td></tr>
+            <tr><td>magnitude</td><td>7.2e-16</td><td>7.2e-16</td></tr>
+          </table>
+        </div>
+        <p class="part-answer">
+          The methods match everywhere, including the border. The only differences are
+          floating-point rounding. I expected the border to differ, since Method 1 mirrors the
+          image twice and Method 2 mirrors it once. But the Gaussian is symmetric, so mirroring
+          before blurring or after blurring gives identical values at the edge.
+        </p>
+
+        <div class="sub-heading">Choosing the threshold</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_edges_t0.05.png" alt="edges at 0.05"></div><div class="result-label">t = 0.05</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_edges_t0.06.png" alt="edges at 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/p13_cameraman_edges_t0.07.png" alt="edges at 0.07, chosen"></div><div class="result-label"><b>t = 0.07 (chosen)</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_edges_t0.08.png" alt="edges at 0.08"></div><div class="result-label">t = 0.08</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_edges_t0.10.png" alt="edges at 0.10"></div><div class="result-label">t = 0.10</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <tr><th>t</th><th>Grass</th><th>Dome</th><th>Tower</th><th>Horizon</th></tr>
+            <tr><td>0.05</td><td>heavy, blobby texture</td><td>full</td><td>visible</td><td>full</td></tr>
+            <tr><td>0.06</td><td>light scattered speckle</td><td>nearly full arc</td><td>left edge + top</td><td>clear</td></tr>
+            <tr><td>0.07</td><td>lighter speckle</td><td>most of the arc</td><td>partial</td><td>clear</td></tr>
+            <tr><td>0.08</td><td>almost clean</td><td>partial</td><td>gone</td><td>partial</td></tr>
+            <tr><td>0.10</td><td>clean</td><td>fragment</td><td>gone</td><td>partial</td></tr>
+          </table>
+        </div>
+        <p class="part-answer">
+          I chose t = 0.07, using the same reasoning as in 1.2: keep most of the
+          background structure (dome, horizon, part of the tower) and accept a little grass
+          speckle. Blurring changes the magnitudes a lot, so the threshold is much lower than
+          1.2's 0.20.
+        </p>
+
+        <div class="sub-heading">Finite difference vs. DoG</div>
+        <div class="film-strip" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_cameraman_edges_t0.20.png" alt="finite difference edges, t=0.20"></div><div class="result-label">finite difference<br><b>t = 0.20</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_cameraman_edges_t0.07.png" alt="DoG edges, t=0.07"></div><div class="result-label">DoG<br><b>t = 0.07</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Smoothing makes the edges thicker and smoother and the grass much quieter. The
+          blur squeezes the grass texture into a narrow band of low magnitudes while real
+          boundaries stay strong, so a threshold can now separate them. That's why the grass
+          almost vanishes between t = 0.05 and 0.08. The tradeoff is precision: edges are a few
+          pixels wide instead of one.
+        </p>
+      </section>
+
+    </div>
+
+    <div class="page-footer">
+      <a href="../01/">← PREV</a>
+      <span class="disabled">NEXT: PROJECT 03</span>
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+  const links = document.querySelectorAll('.section-nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = '#' + entry.target.id;
+        links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === id));
+      }
+    });
+  }, { rootMargin: '-40% 0px -50% 0px' });
+  sections.forEach(s => s && observer.observe(s));
+</script>
+</body>
+</html>
