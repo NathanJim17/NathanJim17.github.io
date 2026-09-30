@@ -50,9 +50,9 @@
       Part 1 builds up 2D convolution from scratch, then uses it to find edges. It starts with a
       numpy-only convolution checked against <code>scipy.signal.convolve2d</code>, moves on to
       finite difference operators for image gradients, and finishes with Gaussian smoothing and
-      Derivative of Gaussian (DoG) filters to get cleaner edges. Part 2 treats images as sums of
-      frequencies: sharpening by boosting high frequencies, hybrid images that change with viewing
-      distance, and multiresolution blending with Gaussian and Laplacian stacks.
+      Derivative of Gaussian (DoG) filters to get cleaner edges. Part 2 works with image
+      frequencies to sharpen images, build hybrids that change with viewing distance, and blend
+      images with Gaussian and Laplacian stacks.
     </div>
 
     <div class="body">
@@ -127,9 +127,9 @@ D_Y = D_X.T</code></pre>
         </div>
         <p class="part-answer">
           The box filter smooths away fine detail such as the hair texture. D<sub>x</sub> responds
-          to vertical edges, where brightness changes left to right: the ceiling beams,
+          to vertical edges, where brightness changes left to right, like the ceiling beams,
           vertical window frames and the sides of the face and nose. Horizontal window bars
-          almost disappear. D<sub>y</sub> does the opposite and picks up horizontal edges:
+          almost disappear. D<sub>y</sub> does the opposite and picks up horizontal edges like
           the window bars, eyebrows, eyelids, mouth and collar. The derivative images look
           embossed because they're signed. For display, 0 maps to mid-gray, positive values
           are lighter and negative values darker.
@@ -151,8 +151,8 @@ D_Y = D_X.T</code></pre>
         </p>
         <p class="part-answer">
           Both match scipy to within floating-point rounding. For the 9&times;9 box, two loops is
-          ~9&times; faster: the 81 multiply-adds run in numpy's compiled code instead of
-          Python. For the 3-tap D<sub>x</sub>/D<sub>y</sub> kernels, four loops actually
+          about 9&times; faster because the 81 multiply-adds run in numpy's compiled code instead
+          of Python. For the 3-tap D<sub>x</sub>/D<sub>y</sub> kernels, four loops actually
           won. Two loops pays a fixed per-pixel overhead (slicing, temp array,
           <code>np.sum</code>) that costs more than 3 plain multiplies. Scipy wins everywhere
           because the whole convolution is compiled.
@@ -212,13 +212,13 @@ D_Y = D_X.T</code></pre>
           </table>
         </div>
         <p class="part-answer">
-          I chose t = 0.20: it keeps the subject, tripod and most background structure
+          I chose t = 0.20 because it keeps the subject, tripod and most background structure
           while removing most grass noise. No threshold is perfect, because grass texture and the
           faint buildings have similar gradient magnitudes. This motivates smoothing in 1.3.
         </p>
         <p class="part-answer">
-          Note: the thin frame in the edge images comes from a 1-pixel semi-transparent
-          border in the provided <code>cameraman.png</code>, not from convolution padding.
+          The thin frame in the edge images comes from a 1-pixel semi-transparent border in the
+          provided <code>cameraman.png</code>, not from convolution padding.
         </p>
       </section>
 
@@ -236,7 +236,7 @@ D_Y = D_X.T</code></pre>
           image with each one once.
         </p>
 
-        <div class="sub-heading">Method 1: blur, then finite differences</div>
+        <div class="sub-heading">Method 1, blur then finite differences</div>
         <div class="film-strip wide" style="margin-top:14px">
           <div class="perf"></div>
           <div class="frames even">
@@ -248,7 +248,7 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
 
-        <div class="sub-heading">Method 2: single convolution with DoG filters</div>
+        <div class="sub-heading">Method 2, one convolution with DoG filters</div>
         <div class="film-strip" style="margin-top:14px">
           <div class="perf"></div>
           <div class="frames even">
@@ -259,19 +259,19 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          Each DoG filter looks like a smoothed <code>[1, 0, -1]</code>: a positive (bright)
+          Each DoG filter looks like a smoothed <code>[1, 0, -1]</code>, with a positive (bright)
           Gaussian lobe next to a negative (dark) one.
         </p>
         <p class="part-answer">
-          Verifying the two methods match. Convolution is associative, so
-          (im &#8859; G) &#8859; D = im &#8859; (G &#8859; D). The maximum absolute differences
-          between the methods are:
+          Convolution is associative, so (im &#8859; G) &#8859; D = im &#8859; (G &#8859; D), and
+          both methods should give the same result. The table shows the largest difference
+          between them.
         </p>
         <div class="table-wrap">
           <table class="data-table">
             <tr><th></th><th>interior (10 px border excluded)</th><th>whole image</th></tr>
-            <tr><td>dx</td><td>7.1e-16</td><td>&mdash;</td></tr>
-            <tr><td>dy</td><td>7.7e-16</td><td>&mdash;</td></tr>
+            <tr><td>dx</td><td>7.1e-16</td><td>not measured</td></tr>
+            <tr><td>dy</td><td>7.7e-16</td><td>not measured</td></tr>
             <tr><td>magnitude</td><td>7.2e-16</td><td>7.2e-16</td></tr>
           </table>
         </div>
@@ -305,9 +305,8 @@ D_Y = D_X.T</code></pre>
           </table>
         </div>
         <p class="part-answer">
-          I chose t = 0.07, using the same reasoning as in 1.2: keep most of the
-          background structure (dome, horizon, part of the tower) and accept a little grass
-          speckle. Blurring changes the magnitudes a lot, so the threshold is much lower than
+          I chose t = 0.07 for the same reason as in 1.2. It keeps most of the background
+          structure (dome, horizon, part of the tower) and accepts a little grass speckle. Blurring changes the magnitudes a lot, so the threshold is much lower than
           1.2's 0.20.
         </p>
 
@@ -324,8 +323,8 @@ D_Y = D_X.T</code></pre>
           Smoothing makes the edges thicker and smoother and the grass much quieter. The
           blur squeezes the grass texture into a narrow band of low magnitudes while real
           boundaries stay strong, so a threshold can now separate them. That's why the grass
-          almost vanishes between t = 0.05 and 0.08. The tradeoff is precision: edges are a few
-          pixels wide instead of one.
+          almost vanishes between t = 0.05 and 0.08. The tradeoff is that edges are a few pixels
+          wide instead of one.
         </p>
       </section>
 
@@ -336,24 +335,19 @@ D_Y = D_X.T</code></pre>
           <span class="part-title">Image "sharpening"</span>
         </div>
         <p class="part-answer">
-          A Gaussian blur is a low-pass filter: it keeps the smooth, slowly changing parts of an
-          image and removes fine detail. Subtracting the blurred image from the original leaves
-          exactly what the blur removed, the high frequencies (edges and texture). Unsharp masking
-          adds those back in, scaled by &alpha;: <code>sharpened = im + &alpha;(im &minus; im &#8859; G)</code>.
-          Edges get more contrast, so the image looks sharper, but no new information is created.
-          Color images are filtered one RGB channel at a time (G is 9&times;9, &sigma; = 1.5).
+          A Gaussian blur keeps the low frequencies. Subtracting it from the original leaves the
+          high frequencies (edges and texture), and unsharp masking adds those back scaled by &alpha;,
+          <code>sharpened = im + &alpha;(im &minus; im &#8859; G)</code>. Edges gain contrast, but no new
+          detail is created. I used a 9&times;9 Gaussian with &sigma; = 1.5 on each RGB channel.
         </p>
         <p class="part-answer">
-          The whole operation is a single convolution. Writing the original as a convolution with
-          an impulse e (<code>im &#8859; e = im</code>):
+          Writing the original as a convolution with an impulse e turns this into one kernel.
         </p>
         <pre class="code-block"><code>im + &alpha;(im &minus; im&#8859;G) = (1+&alpha;)&middot;(im&#8859;e) &minus; &alpha;&middot;(im&#8859;G) = im &#8859; ((1+&alpha;)&middot;e &minus; &alpha;&middot;G)</code></pre>
         <p class="part-answer">
-          The kernel is a tall positive spike with a shallow negative Gaussian around it, and it
-          sums to (1+&alpha;) &minus; &alpha; = 1, so flat regions keep their brightness. Each pixel is
-          amplified and the local average subtracted, which pushes the bright side of an edge
-          brighter and the dark side darker. The one-kernel result matches the two-step version
-          to 1.1e-15.
+          The kernel is a tall spike with a shallow negative Gaussian around it. It sums to 1, so
+          flat areas keep their brightness, while edges get brighter on one side and darker on
+          the other. It matches the two-step version to 1.1e-15.
         </p>
 
         <div class="sub-heading">Taj Mahal</div>
@@ -381,14 +375,12 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          At &alpha; = 1 the dome ridges, arch carvings and tree edges are crisper without looking
-          processed. By &alpha; = 4 it's over-sharpened: dark halos outline the dome and minarets
-          against the sky, light halos surround the dark trees, and colors and texture look harsh.
-          JPEG block artifacts get amplified too, since they're high-frequency and are boosted like
-          real detail.
+          At &alpha; = 1 the dome, carvings and trees look crisper without looking processed. At
+          &alpha; = 4 it's over-sharpened, with dark halos around the dome, light halos around the
+          trees, and amplified JPEG artifacts, since those are high frequencies too.
         </p>
 
-        <div class="sub-heading">My own image: Asakusa at night</div>
+        <div class="sub-heading">My own image, Asakusa at night</div>
         <div class="film-strip wide" style="margin-top:14px">
           <div class="perf"></div>
           <div class="frames even">
@@ -402,11 +394,10 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          This photo is soft from digital zoom, which behaves like a Gaussian blur, so sharpening
-          works well: the balcony lines, road sign and shop sign get noticeably crisper. Higher &alpha;
-          adds halos around the streetlights and the flame, and grain in the dark sky. The
-          foreground leaves stay soft, because their depth-of-field blur is much wider than a
-          9&times;9 Gaussian, so there's little high frequency left to boost.
+          This photo is soft from digital zoom, which behaves like a Gaussian blur, so the balcony
+          lines and signs get noticeably crisper. Higher &alpha; adds halos around the lights and grain
+          in the sky. The foreground leaves stay soft because their blur is much wider than the
+          filter, so there's little high frequency left to boost.
         </p>
 
         <div class="sub-heading">Blur a sharp image, then sharpen it</div>
@@ -422,11 +413,9 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          The blur wipes out the thin suspension cables almost entirely. Sharpening brings back
-          definition in the towers and the thicker cables, but even at &alpha; = 4 the thinnest cables
-          don't return, and there's ringing around the lights. It looks sharper but not like the
-          original: unsharp masking can only amplify frequencies that survived the blur, and the
-          finest ones were removed completely.
+          The blur wipes out the thin cables. Sharpening brings back the towers and thicker
+          cables, but even at &alpha; = 4 the thinnest cables don't return. Sharpening can only boost
+          frequencies that survived the blur, so it looks sharper but not like the original.
         </p>
       </section>
 
@@ -437,14 +426,12 @@ D_Y = D_X.T</code></pre>
           <span class="part-title">Hybrid images</span>
         </div>
         <p class="part-answer">
-          Up close we see fine detail, but from far away only coarse structure survives. A hybrid
-          image adds the high frequencies of one image (<code>im1 &minus; G<sub>&sigma;1</sub> &#8859; im1</code>)
-          to the low frequencies of another (<code>G<sub>&sigma;2</sub> &#8859; im2</code>). The images are
-          aligned first with the provided starter code, by clicking two matching points on each.
-          Each Gaussian is sized about 6&sigma; (odd). A spatial &sigma; corresponds to a frequency cutoff
-          of roughly 1/(2&pi;&sigma;) cycles per pixel, so &sigma; = 3 keeps detail above about 0.05
-          cycles/px in the high-pass, and &sigma; = 6 keeps content below about 0.03 cycles/px in the
-          low-pass.
+          Up close we see fine detail, but from far away only coarse shapes survive. A hybrid adds
+          the high frequencies of one image (<code>im1 &minus; G<sub>&sigma;1</sub> &#8859; im1</code>) to the
+          low frequencies of another (<code>G<sub>&sigma;2</sub> &#8859; im2</code>), after aligning them with
+          the starter code. A Gaussian with spatial &sigma; cuts off around 1/(2&pi;&sigma;) cycles per
+          pixel, so &sigma; = 3 keeps detail above about 0.05 cycles/px and &sigma; = 6 keeps content
+          below about 0.03 cycles/px.
         </p>
 
         <div class="sub-heading">Derek + Nutmeg (full process)</div>
@@ -471,20 +458,16 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          In each log-magnitude FFT, the center is the lowest frequency and distance from the
-          center is frequency. The low-pass keeps only a bright spot in the middle, and the high-pass
-          keeps everything except a dark dot at the center. The hybrid's spectrum is literally
-          Nutmeg's center plus Derek's outer region. The + cross in every spectrum is normal: the
-          FFT treats the image as repeating, so mismatched opposite borders act like an edge.
+          In each FFT, the center is the lowest frequency and farther out is higher. The low-pass
+          keeps only the center, the high-pass keeps everything but the center, and the hybrid's
+          spectrum is Nutmeg's center plus Derek's outer region. The + cross comes from the FFT
+          treating the image as repeating, which is normal.
         </p>
         <p class="part-answer">
-          Choosing the cutoffs: at &sigma; = 5 / 10 (high / low), Derek's whole face shading came
-          through and the cat was faint. Lowering to 3 left Derek mostly as edges (eyes, teeth,
-          hairline), and lowering Nutmeg's &sigma; to 6 made the cat's ears and fur markings readable
-          from a distance. Alignment rotated Derek about 40&deg; to match the cat's head tilt, which
-          added black corners and a black band. Those straight artificial edges showed up as a
-          rectangle outline in the hybrid and as diagonal lines in the FFTs, so both images are
-          cropped to the region with real content before filtering.
+          At &sigma; = 5 and 10, Derek's whole face came through and the cat was faint. Using 3 left
+          Derek mostly as edges, and 6 for Nutmeg made the cat readable from far away. Alignment
+          rotated Derek about 40&deg;, which added black corners that showed up as fake edges, so I
+          cropped both images to the area with real content before filtering.
         </p>
 
         <div class="sub-heading">Hybrids from up close and from far away</div>
@@ -507,10 +490,9 @@ D_Y = D_X.T</code></pre>
           <figure><img src="img/p22_dog_me_hybrid.png" alt="dog and me hybrid, small" style="width:57px"><figcaption>far</figcaption></figure>
         </div>
         <p class="part-answer">
-          My dog's fur is high-contrast texture everywhere, so with equal weights it drowned me
-          out. Using &sigma; = 2 for the dog and scaling its high-pass by 0.6 before adding lets each
-          image win at its own distance: up close you see the dog's eyes (sitting on mine), nose,
-          tongue and whiskers; from far away you see my face shape, hair and jacket.
+          My dog's fur is high-contrast everywhere, so at equal weights it drowned me out. Using
+          &sigma; = 2 and scaling its high-pass by 0.6 fixed that. Up close you see the dog's eyes,
+          nose and tongue, and from far away you see my face, hair and jacket.
         </p>
 
         <div class="film-strip" style="margin-top:22px">
@@ -526,12 +508,10 @@ D_Y = D_X.T</code></pre>
           <figure><img src="img/p22_ball_pizza_hybrid.png" alt="basketball pizza hybrid, small" style="width:60px"><figcaption>far</figcaption></figure>
         </div>
         <p class="part-answer">
-          I first had the roles reversed (pizza high, basketball low), and it was a mess: the
-          ball's lettering survived the low-pass as dark smudges on top of the pepperoni outlines.
-          A basketball's identity is its edges (seams, lettering, pebbled leather), which are high
-          frequencies, while a pepperoni pizza's is its color blobs, which are low frequencies.
-          Swapping the roles fixed it: up close it's a basketball, and from far away the red and
-          white spots read as a pizza.
+          I first had the pizza as the high frequencies, and the ball's lettering showed up as
+          dark smudges over the pepperoni. A basketball is recognized by its edges (seams and
+          lettering) and a pizza by its color blobs, so I swapped them. Now it's a basketball up
+          close and a pizza from far away.
         </p>
       </section>
 
@@ -542,16 +522,13 @@ D_Y = D_X.T</code></pre>
           <span class="part-title">Gaussian and Laplacian stacks</span>
         </div>
         <p class="part-answer">
-          A stack is a pyramid without downsampling: every level is the same size as the original.
-          The Gaussian stack blurs the previous level with the same Gaussian (&sigma; = 2) each time, so
-          the total blur grows level by level. Each Laplacian level is the difference between
-          neighboring Gaussian levels, <code>L<sub>i</sub> = G<sub>i</sub> &minus; G<sub>i+1</sub></code>, which
-          is one band of frequencies, and the last level is the final blurry Gaussian. The levels
-          telescope, so summing the Laplacian stack gives back the original: the max error is
-          2.8e-17 (apple) and 1.4e-17 (orange). A fixed &sigma; grows the blur more slowly than a
-          pyramid's doubling, but doubling would need a 193&times;193 kernel by level 5.
+          A stack is a pyramid without downsampling, so every level is full size. Each Gaussian
+          level blurs the previous one with &sigma; = 2. Each Laplacian level is the difference
+          <code>L<sub>i</sub> = G<sub>i</sub> &minus; G<sub>i+1</sub></code>, one band of frequencies, and the
+          last level is the final Gaussian. Summing the Laplacian stack gives back the original to
+          within 2.8e-17 (apple) and 1.4e-17 (orange).
         </p>
-        <div class="sub-heading">Apple: Gaussian (top) and Laplacian (bottom), levels 0&ndash;4</div>
+        <div class="sub-heading">Apple, Gaussian (top) and Laplacian (bottom), levels 0 to 4</div>
         <div class="film-strip wide" style="margin-top:14px">
           <div class="perf"></div>
           <div class="frames cols-5">
@@ -568,7 +545,7 @@ D_Y = D_X.T</code></pre>
           </div>
           <div class="perf"></div>
         </div>
-        <div class="sub-heading">Orange: Gaussian (top) and Laplacian (bottom), levels 0&ndash;4</div>
+        <div class="sub-heading">Orange, Gaussian (top) and Laplacian (bottom), levels 0 to 4</div>
         <div class="film-strip wide" style="margin-top:14px">
           <div class="perf"></div>
           <div class="frames cols-5">
@@ -586,10 +563,8 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          Moving down the stack goes from fine detail to coarse structure. L0 holds the finest
-          grain (a thin outline, skin speckle, JPEG noise), L3 holds thick soft edges and the
-          highlight blobs, and L4 is the blurry color base. Laplacian levels 0&ndash;3 are signed, so
-          they're normalized for display, with gray meaning 0.
+          The stack goes from fine to coarse. L0 holds the finest grain, L3 holds thick soft edges,
+          and L4 is the blurry color base. Levels L0 to L3 are signed, so gray means 0.
         </p>
       </section>
 
@@ -600,17 +575,16 @@ D_Y = D_X.T</code></pre>
           <span class="part-title">Multiresolution blending</span>
         </div>
         <p class="part-answer">
-          Each image is split into Laplacian bands, the mask gets its own Gaussian stack, and every
-          band is blended separately:
-          <code>B<sub>i</sub> = GM<sub>i</sub>&middot;LA<sub>i</sub> + (1 &minus; GM<sub>i</sub>)&middot;LB<sub>i</sub></code>.
-          Collapsing the blended bands gives the result. Fine bands are mixed with a nearly sharp
-          mask, so there's no ghosting of texture, while coarse bands get a very blurry mask, so
-          colors and shading transition smoothly. Settings: 5 levels, &sigma; = 2 for the images and
-          &sigma; = 8 for the mask.
+          Each image is split into Laplacian bands and the mask gets its own Gaussian stack. Every
+          band is blended separately with
+          <code>B<sub>i</sub> = GM<sub>i</sub>&middot;LA<sub>i</sub> + (1 &minus; GM<sub>i</sub>)&middot;LB<sub>i</sub></code>,
+          then the bands are summed. Fine bands get a sharp mask so texture doesn't ghost, and
+          coarse bands get a blurry mask so colors transition smoothly. I used 5 levels, &sigma; = 2
+          for the images and &sigma; = 8 for the mask.
         </p>
 
-        <div class="sub-heading">The oraple: recreating Szeliski Figure 3.42 (a)&ndash;(l)</div>
-        <p class="part-caption">Rows: Laplacian levels 0, 2, 4, then the full collapsed images. Columns: masked apple, masked orange, combined.</p>
+        <div class="sub-heading">The oraple, recreating Szeliski Figure 3.42 (a) to (l)</div>
+        <p class="part-caption">Each row is a Laplacian level (0, 2, 4) and the last row is the full image. The columns are the masked apple, the masked orange and the two combined.</p>
         <div class="film-strip" style="margin-top:14px">
           <div class="perf"></div>
           <div class="frames cols-3">
@@ -630,13 +604,10 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          The left half reads as apple (smooth red skin, highlight) and the right half as orange
-          (dimpled peel), with a gradual red-to-orange transition and no hard line. The mask's blur
-          has to match the band scales. With a mask &sigma; of 50, the mask was about 0.5 everywhere
-          after level 0 on a 300-pixel image, so the two fruits mixed 50/50 across the whole
-          picture and orange texture covered the apple. Mask &sigma; = 6 and 8 looked nearly
-          identical, because level 0 always uses the unblurred mask and the coarse levels stayed
-          narrow compared with the image. The number of levels matters more.
+          The left half reads as apple and the right half as orange, with a smooth color
+          transition and no hard line. The mask blur has to fit the image. At a mask &sigma; of 50 the
+          mask became about 0.5 everywhere, so the fruits mixed across the whole picture. Mask
+          &sigma; = 6 and 8 looked almost the same, and the number of levels mattered more.
         </p>
 
         <div class="sub-heading">Pepsi | Coke (straight seam)</div>
@@ -650,11 +621,9 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          Both photos were taken from the same spot, then cropped and scaled so the cans match in
-          position and size. The background is identical, so the seam disappears there completely.
-          On the can, color shifts smoothly from Pepsi black to Coke red, while fine edges like the
-          rim and lettering stay sharp right up to the seam. The red reflection on the counter
-          sits only under the Coke half, which is physically consistent.
+          I took both photos from the same spot and lined up the cans. The background is the same
+          in both, so the seam vanishes there. On the can, the color shifts smoothly from black
+          to red while the lettering stays sharp up to the seam.
         </p>
 
         <div class="sub-heading">Mouth on palm (irregular mask)</div>
@@ -669,13 +638,11 @@ D_Y = D_X.T</code></pre>
           <div class="perf"></div>
         </div>
         <p class="part-answer">
-          A take on the eye-in-palm example from Burt and Adelson. The face photo is scaled and
-          shifted so my lips sit in the middle of the palm, and the mask is an ellipse around the
-          lips. My first ellipse also caught my nostrils and goatee, so I tightened it to the lips
-          plus a little skin. In the blend, the ellipse's edge disappears, the warmer skin of my
-          face fades into the pinker tone of my hand, and the palm lines continue faintly toward
-          the mouth. The one giveaway is a few stubble dots at the corners of the lips: that's fine
-          texture near the mask edge, and fine bands use a nearly sharp mask, so it survives.
+          This is my take on the eye-in-palm example from Burt and Adelson. I moved the face photo
+          so my lips sit in the middle of my palm and used an ellipse around the lips as the mask.
+          The edge of the ellipse disappears and my face's warmer skin fades into my hand. The
+          only giveaway is a few stubble dots at the corners, since fine texture near the mask
+          edge survives.
         </p>
       </section>
 
@@ -688,10 +655,8 @@ D_Y = D_X.T</code></pre>
         <p class="part-answer">
           The most important thing I learned is that an image can be split into high and low
           frequencies, and that each one can be used on its own to enhance and represent edges
-          and features. The same Gaussian blur powered every part of this project: separating the
-          two let me find cleaner edges (DoG), sharpen by boosting the high frequencies, build
-          hybrids that change with viewing distance, and blend images band by band so seams
-          disappear.
+          and features. Separating the two with a Gaussian blur is what let me find cleaner edges,
+          sharpen images, build hybrids and blend images without visible seams.
         </p>
       </section>
 
