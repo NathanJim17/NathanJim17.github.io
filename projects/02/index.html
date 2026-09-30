@@ -25,6 +25,10 @@
       <a href="#part-1-1" class="active">· 1.1 convolution</a>
       <a href="#part-1-2">· 1.2 finite diff</a>
       <a href="#part-1-3">· 1.3 DoG</a>
+      <a href="#part-2-1">· 2.1 sharpening</a>
+      <a href="#part-2-2">· 2.2 hybrids</a>
+      <a href="#part-2-3">· 2.3 stacks</a>
+      <a href="#part-2-4">· 2.4 blending</a>
     </nav>
 
     <div class="next-link" style="visibility:hidden">next 03 →</div>
@@ -45,7 +49,9 @@
       Part 1 builds up 2D convolution from scratch, then uses it to find edges. It starts with a
       numpy-only convolution checked against <code>scipy.signal.convolve2d</code>, moves on to
       finite difference operators for image gradients, and finishes with Gaussian smoothing and
-      Derivative of Gaussian (DoG) filters to get cleaner edges.
+      Derivative of Gaussian (DoG) filters to get cleaner edges. Part 2 treats images as sums of
+      frequencies: sharpening by boosting high frequencies, hybrid images that change with viewing
+      distance, and multiresolution blending with Gaussian and Laplacian stacks.
     </div>
 
     <div class="body">
@@ -319,6 +325,335 @@ D_Y = D_X.T</code></pre>
           boundaries stay strong, so a threshold can now separate them. That's why the grass
           almost vanishes between t = 0.05 and 0.08. The tradeoff is precision: edges are a few
           pixels wide instead of one.
+        </p>
+      </section>
+
+      <!-- ============================ 2.1 ============================ -->
+      <section id="part-2-1">
+        <div class="part-heading">
+          <span class="part-chip">PART 2.1</span>
+          <span class="part-title">Image "sharpening"</span>
+        </div>
+        <p class="part-answer">
+          A Gaussian blur is a low-pass filter: it keeps the smooth, slowly changing parts of an
+          image and removes fine detail. Subtracting the blurred image from the original leaves
+          exactly what the blur removed, the high frequencies (edges and texture). Unsharp masking
+          adds those back in, scaled by &alpha;: <code>sharpened = im + &alpha;(im &minus; im &#8859; G)</code>.
+          Edges get more contrast, so the image looks sharper, but no new information is created.
+          Color images are filtered one RGB channel at a time (G is 9&times;9, &sigma; = 1.5).
+        </p>
+        <p class="part-answer">
+          The whole operation is a single convolution. Writing the original as a convolution with
+          an impulse e (<code>im &#8859; e = im</code>):
+        </p>
+        <pre class="code-block"><code>im + &alpha;(im &minus; im&#8859;G) = (1+&alpha;)&middot;(im&#8859;e) &minus; &alpha;&middot;(im&#8859;G) = im &#8859; ((1+&alpha;)&middot;e &minus; &alpha;&middot;G)</code></pre>
+        <p class="part-answer">
+          The kernel is a tall positive spike with a shallow negative Gaussian around it, and it
+          sums to (1+&alpha;) &minus; &alpha; = 1, so flat regions keep their brightness. Each pixel is
+          amplified and the local average subtracted, which pushes the bright side of an edge
+          brighter and the dark side darker. The one-kernel result matches the two-step version
+          to 1.1e-15.
+        </p>
+
+        <div class="sub-heading">Taj Mahal</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_taj.jpg" alt="Taj Mahal original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_taj_blur.png" alt="Taj Mahal blurred"></div><div class="result-label">blurred<br><b>low freq</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_taj_high.png" alt="Taj Mahal high frequencies"></div><div class="result-label">original &minus; blurred<br><b>high freq</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_taj_a1.png" alt="Taj Mahal sharpened, alpha 1"></div><div class="result-label">sharpened<br><b>&alpha; = 1</b></div></div>
+            <div class="result-tile"><div class="frame fit pixel"><img src="img/p21_kernel.png" alt="unsharp mask kernel"></div><div class="result-label">kernel<br><b>&alpha; = 1</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+
+        <div class="sub-heading">Varying the sharpening amount</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_taj_a0.5.png" alt="alpha 0.5"></div><div class="result-label">&alpha; = 0.5</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_taj_a1.png" alt="alpha 1"></div><div class="result-label">&alpha; = 1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_taj_a2.png" alt="alpha 2"></div><div class="result-label">&alpha; = 2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_taj_a4.png" alt="alpha 4"></div><div class="result-label">&alpha; = 4</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          At &alpha; = 1 the dome ridges, arch carvings and tree edges are crisper without looking
+          processed. By &alpha; = 4 it's over-sharpened: dark halos outline the dome and minarets
+          against the sky, light halos surround the dark trees, and colors and texture look harsh.
+          JPEG block artifacts get amplified too, since they're high-frequency and are boosted like
+          real detail.
+        </p>
+
+        <div class="sub-heading">My own image: Asakusa at night</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_asakusa.jpg" alt="Asakusa original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_asakusa_blur.jpg" alt="Asakusa blurred"></div><div class="result-label">blurred</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_asakusa_high.jpg" alt="Asakusa high frequencies"></div><div class="result-label">high freq</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_asakusa_a1.jpg" alt="Asakusa alpha 1"></div><div class="result-label">&alpha; = 1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_asakusa_a2.jpg" alt="Asakusa alpha 2"></div><div class="result-label">&alpha; = 2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_asakusa_a4.jpg" alt="Asakusa alpha 4"></div><div class="result-label">&alpha; = 4</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          This photo is soft from digital zoom, which behaves like a Gaussian blur, so sharpening
+          works well: the balcony lines, road sign and shop sign get noticeably crisper. Higher &alpha;
+          adds halos around the streetlights and the flame, and grain in the dark sky. The
+          foreground leaves stay soft, because their depth-of-field blur is much wider than a
+          9&times;9 Gaussian, so there's little high frequency left to boost.
+        </p>
+
+        <div class="sub-heading">Blur a sharp image, then sharpen it</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_bridge.jpg" alt="bridge original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_bridge_blur.jpg" alt="bridge blurred"></div><div class="result-label">blurred</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_bridge_a1.jpg" alt="bridge re-sharpened alpha 1"></div><div class="result-label">re-sharpened<br><b>&alpha; = 1</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_bridge_a2.jpg" alt="bridge re-sharpened alpha 2"></div><div class="result-label">re-sharpened<br><b>&alpha; = 2</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_bridge_a4.jpg" alt="bridge re-sharpened alpha 4"></div><div class="result-label">re-sharpened<br><b>&alpha; = 4</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The blur wipes out the thin suspension cables almost entirely. Sharpening brings back
+          definition in the towers and the thicker cables, but even at &alpha; = 4 the thinnest cables
+          don't return, and there's ringing around the lights. It looks sharper but not like the
+          original: unsharp masking can only amplify frequencies that survived the blur, and the
+          finest ones were removed completely.
+        </p>
+      </section>
+
+      <!-- ============================ 2.2 ============================ -->
+      <section id="part-2-2">
+        <div class="part-heading">
+          <span class="part-chip">PART 2.2</span>
+          <span class="part-title">Hybrid images</span>
+        </div>
+        <p class="part-answer">
+          Up close we see fine detail, but from far away only coarse structure survives. A hybrid
+          image adds the high frequencies of one image (<code>im1 &minus; G<sub>&sigma;1</sub> &#8859; im1</code>)
+          to the low frequencies of another (<code>G<sub>&sigma;2</sub> &#8859; im2</code>). The images are
+          aligned first with the provided starter code, by clicking two matching points on each.
+          Each Gaussian is sized about 6&sigma; (odd). A spatial &sigma; corresponds to a frequency cutoff
+          of roughly 1/(2&pi;&sigma;) cycles per pixel, so &sigma; = 3 keeps detail above about 0.05
+          cycles/px in the high-pass, and &sigma; = 6 keeps content below about 0.03 cycles/px in the
+          low-pass.
+        </p>
+
+        <div class="sub-heading">Derek + Nutmeg (full process)</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_im1_aligned.png" alt="Derek aligned"></div><div class="result-label">Derek, aligned<br><b>high freq source</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_im2_aligned.png" alt="Nutmeg aligned"></div><div class="result-label">Nutmeg, aligned<br><b>low freq source</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_high.png" alt="Derek high-pass"></div><div class="result-label">high-pass<br><b>&sigma; = 3</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_low.png" alt="Nutmeg low-pass"></div><div class="result-label">low-pass<br><b>&sigma; = 6</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_hybrid.png" alt="Derek Nutmeg hybrid"></div><div class="result-label">hybrid</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_log_fft_im1.png" alt="FFT of Derek"></div><div class="result-label">FFT<br><b>Derek</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_log_fft_im2.png" alt="FFT of Nutmeg"></div><div class="result-label">FFT<br><b>Nutmeg</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_log_fft_high.png" alt="FFT of high-pass"></div><div class="result-label">FFT<br><b>high-pass</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_log_fft_low.png" alt="FFT of low-pass"></div><div class="result-label">FFT<br><b>low-pass</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_derek_nutmeg_log_fft_hybrid.png" alt="FFT of hybrid"></div><div class="result-label">FFT<br><b>hybrid</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          In each log-magnitude FFT, the center is the lowest frequency and distance from the
+          center is frequency. The low-pass keeps only a bright spot in the middle, and the high-pass
+          keeps everything except a dark dot at the center. The hybrid's spectrum is literally
+          Nutmeg's center plus Derek's outer region. The + cross in every spectrum is normal: the
+          FFT treats the image as repeating, so mismatched opposite borders act like an edge.
+        </p>
+        <p class="part-answer">
+          Choosing the cutoffs: at &sigma; = 5 / 10 (high / low), Derek's whole face shading came
+          through and the cat was faint. Lowering to 3 left Derek mostly as edges (eyes, teeth,
+          hairline), and lowering Nutmeg's &sigma; to 6 made the cat's ears and fur markings readable
+          from a distance. Alignment rotated Derek about 40&deg; to match the cat's head tilt, which
+          added black corners and a black band. Those straight artificial edges showed up as a
+          rectangle outline in the hybrid and as diagonal lines in the FFTs, so both images are
+          cropped to the region with real content before filtering.
+        </p>
+
+        <div class="sub-heading">Hybrids from up close and from far away</div>
+        <p class="part-caption">Each hybrid is shown large (up close) and small (roughly what you see from across the room).</p>
+        <div class="distance-row">
+          <figure><img src="img/p22_derek_nutmeg_hybrid.png" alt="Derek Nutmeg hybrid, large" style="width:300px"><figcaption>Derek + Nutmeg, close</figcaption></figure>
+          <figure><img src="img/p22_derek_nutmeg_hybrid.png" alt="Derek Nutmeg hybrid, small" style="width:60px"><figcaption>far</figcaption></figure>
+        </div>
+
+        <div class="film-strip" style="margin-top:22px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_dog_me_im1_aligned.png" alt="my dog"></div><div class="result-label">my dog<br><b>high, &sigma; = 2</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_dog_me_im2_aligned.png" alt="me"></div><div class="result-label">me<br><b>low, &sigma; = 6</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="distance-row">
+          <figure><img src="img/p22_dog_me_hybrid.png" alt="dog and me hybrid, large" style="width:283px"><figcaption>dog + me, close</figcaption></figure>
+          <figure><img src="img/p22_dog_me_hybrid.png" alt="dog and me hybrid, small" style="width:57px"><figcaption>far</figcaption></figure>
+        </div>
+        <p class="part-answer">
+          My dog's fur is high-contrast texture everywhere, so with equal weights it drowned me
+          out. Using &sigma; = 2 for the dog and scaling its high-pass by 0.6 before adding lets each
+          image win at its own distance: up close you see the dog's eyes (sitting on mine), nose,
+          tongue and whiskers; from far away you see my face shape, hair and jacket.
+        </p>
+
+        <div class="film-strip" style="margin-top:22px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_ball_pizza_im1_aligned.png" alt="basketball"></div><div class="result-label">basketball<br><b>high, &sigma; = 3</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p22_ball_pizza_im2_aligned.png" alt="pizza"></div><div class="result-label">pizza<br><b>low, &sigma; = 6</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="distance-row">
+          <figure><img src="img/p22_ball_pizza_hybrid.png" alt="basketball pizza hybrid, large" style="width:300px"><figcaption>basketball + pizza, close</figcaption></figure>
+          <figure><img src="img/p22_ball_pizza_hybrid.png" alt="basketball pizza hybrid, small" style="width:60px"><figcaption>far</figcaption></figure>
+        </div>
+        <p class="part-answer">
+          I first had the roles reversed (pizza high, basketball low), and it was a mess: the
+          ball's lettering survived the low-pass as dark smudges on top of the pepperoni outlines.
+          A basketball's identity is its edges (seams, lettering, pebbled leather), which are high
+          frequencies, while a pepperoni pizza's is its color blobs, which are low frequencies.
+          Swapping the roles fixed it: up close it's a basketball, and from far away the red and
+          white spots read as a pizza.
+        </p>
+      </section>
+
+      <!-- ============================ 2.3 ============================ -->
+      <section id="part-2-3">
+        <div class="part-heading">
+          <span class="part-chip">PART 2.3</span>
+          <span class="part-title">Gaussian and Laplacian stacks</span>
+        </div>
+        <p class="part-answer">
+          A stack is a pyramid without downsampling: every level is the same size as the original.
+          The Gaussian stack blurs the previous level with the same Gaussian (&sigma; = 2) each time, so
+          the total blur grows level by level. Each Laplacian level is the difference between
+          neighboring Gaussian levels, <code>L<sub>i</sub> = G<sub>i</sub> &minus; G<sub>i+1</sub></code>, which
+          is one band of frequencies, and the last level is the final blurry Gaussian. The levels
+          telescope, so summing the Laplacian stack gives back the original: the max error is
+          2.8e-17 (apple) and 1.4e-17 (orange). A fixed &sigma; grows the blur more slowly than a
+          pyramid's doubling, but doubling would need a 193&times;193 kernel by level 5.
+        </p>
+        <div class="sub-heading">Apple: Gaussian (top) and Laplacian (bottom), levels 0&ndash;4</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-5">
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_gaussian_0.png" alt="apple gaussian 0"></div><div class="result-label">G0</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_gaussian_1.png" alt="apple gaussian 1"></div><div class="result-label">G1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_gaussian_2.png" alt="apple gaussian 2"></div><div class="result-label">G2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_gaussian_3.png" alt="apple gaussian 3"></div><div class="result-label">G3</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_gaussian_4.png" alt="apple gaussian 4"></div><div class="result-label">G4</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_laplacian_0.png" alt="apple laplacian 0"></div><div class="result-label">L0</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_laplacian_1.png" alt="apple laplacian 1"></div><div class="result-label">L1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_laplacian_2.png" alt="apple laplacian 2"></div><div class="result-label">L2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_laplacian_3.png" alt="apple laplacian 3"></div><div class="result-label">L3</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_apple_laplacian_4.png" alt="apple laplacian 4"></div><div class="result-label">L4 = G4</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="sub-heading">Orange: Gaussian (top) and Laplacian (bottom), levels 0&ndash;4</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-5">
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_gaussian_0.png" alt="orange gaussian 0"></div><div class="result-label">G0</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_gaussian_1.png" alt="orange gaussian 1"></div><div class="result-label">G1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_gaussian_2.png" alt="orange gaussian 2"></div><div class="result-label">G2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_gaussian_3.png" alt="orange gaussian 3"></div><div class="result-label">G3</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_gaussian_4.png" alt="orange gaussian 4"></div><div class="result-label">G4</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_laplacian_0.png" alt="orange laplacian 0"></div><div class="result-label">L0</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_laplacian_1.png" alt="orange laplacian 1"></div><div class="result-label">L1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_laplacian_2.png" alt="orange laplacian 2"></div><div class="result-label">L2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_laplacian_3.png" alt="orange laplacian 3"></div><div class="result-label">L3</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p23_orange_laplacian_4.png" alt="orange laplacian 4"></div><div class="result-label">L4 = G4</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Moving down the stack goes from fine detail to coarse structure. L0 holds the finest
+          grain (a thin outline, skin speckle, JPEG noise), L3 holds thick soft edges and the
+          highlight blobs, and L4 is the blurry color base. Laplacian levels 0&ndash;3 are signed, so
+          they're normalized for display, with gray meaning 0.
+        </p>
+      </section>
+
+      <!-- ============================ 2.4 ============================ -->
+      <section id="part-2-4">
+        <div class="part-heading">
+          <span class="part-chip">PART 2.4</span>
+          <span class="part-title">Multiresolution blending</span>
+        </div>
+        <p class="part-answer">
+          Each image is split into Laplacian bands, the mask gets its own Gaussian stack, and every
+          band is blended separately:
+          <code>B<sub>i</sub> = GM<sub>i</sub>&middot;LA<sub>i</sub> + (1 &minus; GM<sub>i</sub>)&middot;LB<sub>i</sub></code>.
+          Collapsing the blended bands gives the result. Fine bands are mixed with a nearly sharp
+          mask, so there's no ghosting of texture, while coarse bands get a very blurry mask, so
+          colors and shading transition smoothly. Settings: 5 levels, &sigma; = 2 for the images and
+          &sigma; = 8 for the mask.
+        </p>
+
+        <div class="sub-heading">The oraple: recreating Szeliski Figure 3.42 (a)&ndash;(l)</div>
+        <p class="part-caption">Rows: Laplacian levels 0, 2, 4, then the full collapsed images. Columns: masked apple, masked orange, combined.</p>
+        <div class="film-strip" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-3">
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_apple_0.png" alt="(a) apple level 0"></div><div class="result-label">(a) apple, L0</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_orange_0.png" alt="(b) orange level 0"></div><div class="result-label">(b) orange, L0</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_sum_0.png" alt="(c) combined level 0"></div><div class="result-label">(c) combined, L0</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_apple_2.png" alt="(d) apple level 2"></div><div class="result-label">(d) apple, L2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_orange_2.png" alt="(e) orange level 2"></div><div class="result-label">(e) orange, L2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_sum_2.png" alt="(f) combined level 2"></div><div class="result-label">(f) combined, L2</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_apple_4.png" alt="(g) apple level 4"></div><div class="result-label">(g) apple, L4</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_orange_4.png" alt="(h) orange level 4"></div><div class="result-label">(h) orange, L4</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_sum_4.png" alt="(i) combined level 4"></div><div class="result-label">(i) combined, L4</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_masked_apple.png" alt="(j) masked apple"></div><div class="result-label">(j) masked apple</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_fig3_42_masked_orange.png" alt="(k) masked orange"></div><div class="result-label">(k) masked orange</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/p24_oraple.png" alt="(l) oraple"></div><div class="result-label"><b>(l) oraple</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The left half reads as apple (smooth red skin, highlight) and the right half as orange
+          (dimpled peel), with a gradual red-to-orange transition and no hard line. The mask's blur
+          has to match the band scales. With a mask &sigma; of 50, the mask was about 0.5 everywhere
+          after level 0 on a 300-pixel image, so the two fruits mixed 50/50 across the whole
+          picture and orange texture covered the apple. Mask &sigma; = 6 and 8 looked nearly
+          identical, because level 0 always uses the unblurred mask and the coarse levels stayed
+          narrow compared with the image. The number of levels matters more.
+        </p>
+
+        <div class="sub-heading">Pepsi | Coke (straight seam)</div>
+        <div class="film-strip" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-3">
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_pepsi.jpg" alt="Pepsi can"></div><div class="result-label">Pepsi</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p24_coke.jpg" alt="Coke can"></div><div class="result-label">Coke</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/p24_pepsi_coke.jpg" alt="Pepsi Coke blend"></div><div class="result-label"><b>blended</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Both photos were taken from the same spot, then cropped and scaled so the cans match in
+          position and size. The background is identical, so the seam disappears there completely.
+          On the can, color shifts smoothly from Pepsi black to Coke red, while fine edges like the
+          rim and lettering stay sharp right up to the seam. The red reflection on the counter
+          sits only under the Coke half, which is physically consistent.
         </p>
       </section>
 
