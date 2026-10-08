@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project 03A: Flow Models for Image Generation and Editing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../css/site.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="film-bars">
+      <span style="background: var(--red)"></span>
+      <span style="background: var(--yellow)"></span>
+      <span style="background: var(--blue)"></span>
+    </div>
+
+    <a href="../../" class="back-index">← INDEX</a>
+    <div class="project-label">PROJECT 03A</div>
+
+    <nav class="section-nav">
+      <a href="#part-1-1" class="active">· 1.1 noisy inputs</a>
+      <a href="#part-1-2">· 1.2 blur denoise</a>
+      <a href="#part-1-3">· 1.3 one step</a>
+      <a href="#part-1-4">· 1.4 velocity</a>
+      <a href="#part-1-5">· 1.5 Euler</a>
+      <a href="#part-1-6">· 1.6 from noise</a>
+      <a href="#part-2-1">· 2.1 CFG</a>
+      <a href="#part-3-1">· 3.1 SDEdit</a>
+      <a href="#part-3-1b">· 3.1 drawings</a>
+      <a href="#part-3-2">· 3.2 text edits</a>
+      <a href="#part-3-3">· 3.3 anagrams</a>
+      <a href="#part-3-4">· 3.4 hybrids</a>
+    </nav>
+
+    <div class="next-link" style="visibility:hidden">next 04 →</div>
+  </aside>
+
+  <main class="main" style="padding:0">
+
+    <div class="hero hero-yellow">
+      <div class="lens"><div class="lens-inner"></div></div>
+      <div>
+        <div class="hero-eyebrow">PROJECT 03 &middot; PART A</div>
+        <div class="hero-title">Flow Models for<br>Image Generation</div>
+      </div>
+      <span class="hero-url">nathanjim17.github.io</span>
+    </div>
+
+    <div class="summary">
+      This project uses a pretrained text-to-image flow model, PixNerd, to denoise, generate and
+      edit 512&times;512 images without any training. A flow model learns a velocity that moves
+      an image from pure noise at t = 0 to a clean image at t = 1. Part 1 looks at what that
+      velocity does on a noisy photo and builds an Euler sampler. Part 2 adds classifier-free
+      guidance. Part 3 uses the sampler for image editing, visual anagrams and hybrid images.
+    </div>
+
+    <div class="body">
+
+      <!-- ============================ 1.1 ============================ -->
+      <section id="part-1-1">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.1</span>
+          <span class="part-title">Constructing noisy training inputs</span>
+        </div>
+        <p class="part-answer">
+          A noisy input is a straight-line mix of Gaussian noise &epsilon; and the clean image
+          x<sub>1</sub>, <code>x<sub>t</sub> = (1&minus;t)&epsilon; + t&middot;x<sub>1</sub></code>.
+          At t = 0 it's pure noise and at t = 1 it's the clean image. I sampled one noise tensor
+          with seed 180 and reused it at all three times, so Sections 1.2 to 1.5 all start from
+          the same inputs.
+        </p>
+        <pre class="code-block"><code>def interpolate(image, noise, t):
+    xt = (1-t)*noise + t*image
+    return xt</code></pre>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_original.jpg" alt="waterfall original"></div><div class="result-label">original<br><b>t = 1</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_t0.25.jpg" alt="noisy at t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_t0.50.jpg" alt="noisy at t 0.50"></div><div class="result-label">t = 0.50</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_t0.75.jpg" alt="noisy at t 0.75"></div><div class="result-label">t = 0.75</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          At t = 0.25 only the sky and the pale falls show through. By t = 0.75 the photo is
+          clear with light grain, mostly visible in the sky and water.
+        </p>
+      </section>
+
+      <!-- ============================ 1.2 ============================ -->
+      <section id="part-1-2">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.2</span>
+          <span class="part-title">Classical denoising</span>
+        </div>
+        <p class="part-answer">
+          As a baseline without a learned model, each input is divided by t to restore the image
+          brightness and then Gaussian blurred. The notebook tries &sigma; = 1, 2, 4, 8 and 16 and
+          keeps the one with the lowest error against the clean photo.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_noisy_t0.25.jpg" alt="noisy t 0.25"></div><div class="result-label">noisy<br><b>t = 0.25</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_blur_t0.25.jpg" alt="blurred t 0.25"></div><div class="result-label">blur<br><b>&sigma; = 8</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_noisy_t0.50.jpg" alt="noisy t 0.50"></div><div class="result-label">noisy<br><b>t = 0.50</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_blur_t0.50.jpg" alt="blurred t 0.50"></div><div class="result-label">blur<br><b>&sigma; = 2</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_noisy_t0.75.jpg" alt="noisy t 0.75"></div><div class="result-label">noisy<br><b>t = 0.75</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_blur_t0.75.jpg" alt="blurred t 0.75"></div><div class="result-label">blur<br><b>&sigma; = 1</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The best &sigma; grows as t drops. Dividing by t also scales the noise up, so at low t
+          the noise is so strong that the best trade is to blur almost everything away. At
+          t = 0.25 the result is just a pale sky blob over a dark mass. A blur can't tell noise
+          from real texture, so the thin streams and rocks disappear along with the grain.
+        </p>
+      </section>
+
+      <!-- ============================ 1.3 ============================ -->
+      <section id="part-1-3">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.3</span>
+          <span class="part-title">One-step denoising</span>
+        </div>
+        <p class="part-answer">
+          The model predicts a velocity v<sub>&theta;</sub>(x<sub>t</sub>, t, c) that points toward
+          the clean image. Taking one full step to t = 1 gives an estimate
+          <code>x&#770;<sub>1</sub> = x<sub>t</sub> + (1&minus;t)v<sub>&theta;</sub></code>. The
+          prompt here is "a high quality photo".
+        </p>
+        <pre class="code-block"><code>def one_step_denoise(x, t, condition, predict_velocity):
+    v = predict_velocity(x, t, condition)
+    x1_hat = x + (1-t)*v
+    return x1_hat</code></pre>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_original.jpg" alt="original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_onestep_t0.25.jpg" alt="one step from t 0.25"></div><div class="result-label">one step<br><b>from t = 0.25</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_onestep_t0.50.jpg" alt="one step from t 0.50"></div><div class="result-label">one step<br><b>from t = 0.50</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_onestep_t0.75.jpg" alt="one step from t 0.75"></div><div class="result-label">one step<br><b>from t = 0.75</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Even from t = 0.25 the model returns a clean waterfall with the right layout, where the
+          blur only gave a color blob. The model knows what natural photos look like, so it keeps
+          edges and objects. But the detail is invented and soft, with fewer streams, generic
+          trees and smeared rocks. Many sharp photos match the same noisy input, and one step
+          lands on their average, which is blurry. From t = 0.75 it's nearly identical to the
+          original.
+        </p>
+      </section>
+
+      <!-- ============================ 1.4 ============================ -->
+      <section id="part-1-4">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.4</span>
+          <span class="part-title">Visualizing velocity</span>
+        </div>
+        <p class="part-answer">
+          Since I know the noise, the update that would exactly recover the photo is
+          <code>(1&minus;t)(x<sub>1</sub> &minus; &epsilon;) = x<sub>1</sub> &minus; x<sub>t</sub></code>.
+          I compare it with the model's update (1&minus;t)v&#770;. Updates use one shared signed
+          scale where gray is 0. The error is the RMS over RGB at each pixel, on one shared color
+          scale for all three times.
+        </p>
+        <pre class="code-block"><code>vt_hat = predict_velocity(x_t, t, condition)
+v_gt = clean_image - epsilon
+predicted_update = (1-t)*vt_hat
+target_update = (1-t)*v_gt
+error_map = ((predicted_update - target_update)**2).mean(dim=1).sqrt()</code></pre>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_t0.25.jpg" alt="noisy t 0.25"></div><div class="result-label">noisy<br><b>t = 0.25</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_pred_t0.25.jpg" alt="predicted update t 0.25"></div><div class="result-label">predicted</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_gt_t0.25.jpg" alt="ground truth update t 0.25"></div><div class="result-label">ground truth</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_err_t0.25.jpg" alt="error map t 0.25"></div><div class="result-label">RMS error</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_t0.50.jpg" alt="noisy t 0.50"></div><div class="result-label">noisy<br><b>t = 0.50</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_pred_t0.50.jpg" alt="predicted update t 0.50"></div><div class="result-label">predicted</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_gt_t0.50.jpg" alt="ground truth update t 0.50"></div><div class="result-label">ground truth</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_err_t0.50.jpg" alt="error map t 0.50"></div><div class="result-label">RMS error</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_t0.75.jpg" alt="noisy t 0.75"></div><div class="result-label">noisy<br><b>t = 0.75</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_pred_t0.75.jpg" alt="predicted update t 0.75"></div><div class="result-label">predicted</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_gt_t0.75.jpg" alt="ground truth update t 0.75"></div><div class="result-label">ground truth</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p14_err_t0.75.jpg" alt="error map t 0.75"></div><div class="result-label">RMS error</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The predicted update has the same layout as the true one but is much smoother. The true
+          update also contains the exact noise pattern to subtract, which the model can't know,
+          so it predicts the average update instead. Both fade toward gray as t grows because
+          there is less left to remove. The error is highest on the tree line, the falls and the
+          rocks, and lowest in the smooth sky and water. It drops a lot from t = 0.25 to 0.75.
+          This is why the one-step results in 1.3 are soft.
+        </p>
+      </section>
+
+      <!-- ============================ 1.5 ============================ -->
+      <section id="part-1-5">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.5</span>
+          <span class="part-title">Iterative denoising with Euler sampling</span>
+        </div>
+        <p class="part-answer">
+          Instead of one big step, Euler sampling takes many small ones,
+          <code>x<sub>t+h</sub> = x<sub>t</sub> + h&middot;v(x<sub>t</sub>, t)</code>, recomputing
+          the velocity each time. With h = 0.02, starting at t = 0.50 takes 25 steps. The last
+          step is shortened if needed so it ends exactly at t = 1.
+        </p>
+        <pre class="code-block"><code>@torch.inference_mode()
+def euler_sample(x_start, t_start, step_size, velocity):
+    t = t_start
+    x_th = x_start
+    states = [(t, x_th)]
+    while t &lt; 1:
+        h = min(step_size, 1-t)
+        x_th = x_th + h * velocity(x_th, t)
+        t += h
+        states.append((t, x_th))
+    return x_th, states</code></pre>
+        <div class="sub-heading">Every fifth step from t = 0.50</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p15_t0.50.jpg" alt="Euler t 0.50"></div><div class="result-label">t = 0.50</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p15_t0.60.jpg" alt="Euler t 0.60"></div><div class="result-label">t = 0.60</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p15_t0.70.jpg" alt="Euler t 0.70"></div><div class="result-label">t = 0.70</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p15_t0.80.jpg" alt="Euler t 0.80"></div><div class="result-label">t = 0.80</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p15_t0.90.jpg" alt="Euler t 0.90"></div><div class="result-label">t = 0.90</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p15_t1.00.jpg" alt="Euler t 1.00"></div><div class="result-label">t = 1.00</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="sub-heading">Comparison on the t = 0.50 input</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p11_original.jpg" alt="original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p12_blur_t0.50.jpg" alt="blur"></div><div class="result-label">blur<br><b>&sigma; = 2</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p13_onestep_t0.50.jpg" alt="one step"></div><div class="result-label">one step</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/p15_euler.jpg" alt="Euler"></div><div class="result-label"><b>Euler, 25 steps</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The grain fades gradually, and the last few steps mostly sharpen texture and color.
+          Euler is clearly the sharpest of the three, with real detail in the thin streams, rocks
+          and trees. Each step only moves a little and then asks the model again on a cleaner
+          image, so the model can commit to specific detail instead of averaging over every
+          possibility like the one-step estimate.
+        </p>
+      </section>
+
+      <!-- ============================ 1.6 ============================ -->
+      <section id="part-1-6">
+        <div class="part-heading">
+          <span class="part-chip">PART 1.6</span>
+          <span class="part-title">Generating images from noise</span>
+        </div>
+        <p class="part-answer">
+          Starting from pure noise at t = 0 and running all 50 Euler steps generates a new image.
+          These use "a high quality photo" with seeds 180 to 184.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p16_seed180.jpg" alt="sample seed 180"></div><div class="result-label">seed 180</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p16_seed181.jpg" alt="sample seed 181"></div><div class="result-label">seed 181</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p16_seed182.jpg" alt="sample seed 182"></div><div class="result-label">seed 182</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p16_seed183.jpg" alt="sample seed 183"></div><div class="result-label">seed 183</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p16_seed184.jpg" alt="sample seed 184"></div><div class="result-label">seed 184</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          All five are portraits of people, even though the prompt never mentions a person. A
+          generic prompt gives the model little to go on, so it falls back on the most common
+          kind of photo it was trained on. Quality is uneven. Seeds 182 and 184 look natural, but
+          180 has a smoothed-over face and 181 and 183 have warped skin and anatomy.
+        </p>
+      </section>
+
+      <!-- ============================ 2.1 ============================ -->
+      <section id="part-2-1">
+        <div class="part-heading">
+          <span class="part-chip">PART 2.1</span>
+          <span class="part-title">Classifier-free guidance</span>
+        </div>
+        <p class="part-answer">
+          CFG runs the model twice per step, once with the prompt and once with an empty prompt,
+          and pushes past the conditional prediction,
+          <code>v<sub>cfg</sub> = v<sub>c</sub> + w(v<sub>c</sub> &minus; v<sub>u</sub>)</code>.
+          At w = 0 it's the plain conditional velocity. I used w = 7 and the same five noises as
+          1.6.
+        </p>
+        <pre class="code-block"><code>def cfg_velocity(x, t, condition, w, predict_velocity, null_condition=''):
+    v_c = predict_velocity(x, t, condition)
+    v_u = predict_velocity(x, t, null_condition)
+    return v_c + w*(v_c - v_u)</code></pre>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_seed180.jpg" alt="CFG seed 180"></div><div class="result-label">seed 180<br><b>w = 7</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_seed181.jpg" alt="CFG seed 181"></div><div class="result-label">seed 181<br><b>w = 7</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_seed182.jpg" alt="CFG seed 182"></div><div class="result-label">seed 182<br><b>w = 7</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_seed183.jpg" alt="CFG seed 183"></div><div class="result-label">seed 183<br><b>w = 7</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p21_seed184.jpg" alt="CFG seed 184"></div><div class="result-label">seed 184<br><b>w = 7</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Every sample is now a clean, sharp headshot, and the warped faces from 1.6 are gone. The
+          cost is diversity. All five are front-facing close-ups on a plain studio background,
+          where 1.6 had different poses, framing and lighting. The noise still sets the rough
+          layout, like the raised hand in seed 182. Guidance trades variety for quality by
+          pulling every sample toward the most typical "high quality photo".
+        </p>
+      </section>
+
+      <!-- ============================ 3.1 ============================ -->
+      <section id="part-3-1">
+        <div class="part-heading">
+          <span class="part-chip">PART 3.1</span>
+          <span class="part-title">Image-to-image editing</span>
+        </div>
+        <p class="part-answer">
+          To edit a photo, I add noise up to a start time with <code>interpolate</code> and then
+          run the CFG Euler sampler back to t = 1 with "a high quality photo". A low start time
+          means more noise, so the model has more freedom to change the image. All edits use the
+          same noise (seed 180), h = 0.02 and w = 7.
+        </p>
+        <pre class="code-block"><code>def edit(image, noise, t_start, condition, predict_velocity, w=7, step_size=0.02):
+    x_start = interpolate(image, noise, t_start)
+
+    def velocity(x, t):
+        return cfg_velocity(x, t, condition, w, predict_velocity, null_condition)
+
+    final, _ = euler_sample(x_start, t_start, step_size, velocity)
+    return final</code></pre>
+
+        <div class="sub-heading">Campanile</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_campanile_original.jpg" alt="Campanile original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_campanile_t0.02.jpg" alt="Campanile edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_campanile_t0.04.jpg" alt="Campanile edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_campanile_t0.06.jpg" alt="Campanile edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_campanile_t0.10.jpg" alt="Campanile edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_campanile_t0.14.jpg" alt="Campanile edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_campanile_t0.25.jpg" alt="Campanile edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_campanile_t0.50.jpg" alt="Campanile edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+
+        <div class="sub-heading">My waterfall photo</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_waterfall_original.jpg" alt="waterfall original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_waterfall_t0.02.jpg" alt="waterfall edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_waterfall_t0.04.jpg" alt="waterfall edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_waterfall_t0.06.jpg" alt="waterfall edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_waterfall_t0.10.jpg" alt="waterfall edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_waterfall_t0.14.jpg" alt="waterfall edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_waterfall_t0.25.jpg" alt="waterfall edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_waterfall_t0.50.jpg" alt="waterfall edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+
+        <div class="sub-heading">Squid ink paella</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_paella_original.jpg" alt="paella original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_paella_t0.02.jpg" alt="paella edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_paella_t0.04.jpg" alt="paella edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_paella_t0.06.jpg" alt="paella edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_paella_t0.10.jpg" alt="paella edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_paella_t0.14.jpg" alt="paella edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_paella_t0.25.jpg" alt="paella edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31_paella_t0.50.jpg" alt="paella edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          At the lowest start times almost nothing of the input survives except its rough colors.
+          The waterfall and the paella both turn into people, the same bias seen in 1.6, while
+          the Campanile becomes a plain white tower against blue sky. As the start time rises the
+          original comes back in stages. First the layout returns, like the waterfall cliff at
+          0.14 or the round pan at 0.10, then the objects, and finally the fine detail. By 0.50
+          each edit is a slightly cleaned up copy of the input. The middle times give the most
+          interesting edits, like the paella turning into a flower at 0.10 and into clam shells
+          around an egg at 0.14.
+        </p>
+      </section>
+
+      <!-- ============================ 3.1b ============================ -->
+      <section id="part-3-1b">
+        <div class="part-heading">
+          <span class="part-chip">PART 3.1</span>
+          <span class="part-title">Editing hand-drawn and web images</span>
+        </div>
+        <p class="part-answer">
+          The same editing procedure works on images that aren't photos. With "a high quality
+          photo" as the prompt, the model tries to pull each input toward a realistic photo.
+        </p>
+
+        <div class="sub-heading">Web image, The Starry Night</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_starry_original.jpg" alt="Starry Night original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_starry_t0.02.jpg" alt="Starry Night edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_starry_t0.04.jpg" alt="Starry Night edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_starry_t0.06.jpg" alt="Starry Night edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_starry_t0.10.jpg" alt="Starry Night edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_starry_t0.14.jpg" alt="Starry Night edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_starry_t0.25.jpg" alt="Starry Night edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_starry_t0.50.jpg" alt="Starry Night edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          At low start times the blue becomes the screen of a computer or a gadget. Around 0.14
+          the bright stars come back as soft glowing circles, and at 0.25 the swirls return as
+          a smooth, blurry version of the painting. By 0.50 it stays a painting with brush
+          strokes instead of turning into a photo.
+        </p>
+
+        <div class="sub-heading">Drawing 1, painted strokes on a photo</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing1_original.jpg" alt="drawing 1 original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing1_t0.02.jpg" alt="drawing 1 edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing1_t0.04.jpg" alt="drawing 1 edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing1_t0.06.jpg" alt="drawing 1 edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing1_t0.10.jpg" alt="drawing 1 edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing1_t0.14.jpg" alt="drawing 1 edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing1_t0.25.jpg" alt="drawing 1 edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing1_t0.50.jpg" alt="drawing 1 edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          For this one I painted lava, a lake and a boat on top of a real photo, trying to
+          recreate the stroke editing examples from the
+          <a href="https://sde-image-editing.github.io/" target="_blank" rel="noopener">SDEdit paper</a>.
+          It didn't really work. The flat blue area I painted never becomes water. At low start times the model treats
+          it as a graphic, a poster or web page full of fake text. From 0.06 to 0.14 the
+          mountain turns into a realistic snowy peak, while my brown boat becomes a stamp and
+          then the bust of a person. At 0.25 the lava strokes become red rock on the mountain,
+          and at 0.50 the drawing is barely changed.
+        </p>
+
+        <div class="sub-heading">Drawing 2, a mountain lake</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing2_original.jpg" alt="drawing 2 original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing2_t0.02.jpg" alt="drawing 2 edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing2_t0.04.jpg" alt="drawing 2 edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing2_t0.06.jpg" alt="drawing 2 edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing2_t0.10.jpg" alt="drawing 2 edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing2_t0.14.jpg" alt="drawing 2 edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing2_t0.25.jpg" alt="drawing 2 edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p31b_drawing2_t0.50.jpg" alt="drawing 2 edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The flat gray and blue shapes become plastic tech objects at low start times, a camera,
+          a blue gadget and a blue car. At 0.10 a blurry landscape appears, and from 0.14 to 0.25
+          the lake and snowy peaks stay with added grass texture and shading. It never becomes a
+          real photo. By the start times where my layout survives, the flat colors survive too,
+          so the result stays a drawing.
+        </p>
+      </section>
+
+      <!-- ============================ 3.2 ============================ -->
+      <section id="part-3-2">
+        <div class="part-heading">
+          <span class="part-chip">PART 3.2</span>
+          <span class="part-title">Text-guided image editing</span>
+        </div>
+        <p class="part-answer">
+          This is the same editing procedure as 3.1, with the same noise and start times, but
+          the generic prompt is replaced by one describing the edit I want.
+        </p>
+
+        <div class="sub-heading">Campanile, &quot;a photo of a building that looks like a giant pencil&quot;</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_pencil_original.jpg" alt="Campanile pencil original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_pencil_t0.02.jpg" alt="Campanile pencil text edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_pencil_t0.04.jpg" alt="Campanile pencil text edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_pencil_t0.06.jpg" alt="Campanile pencil text edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_pencil_t0.10.jpg" alt="Campanile pencil text edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_pencil_t0.14.jpg" alt="Campanile pencil text edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_pencil_t0.25.jpg" alt="Campanile pencil text edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_pencil_t0.50.jpg" alt="Campanile pencil text edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          At low start times the tower becomes a literal pencil building with a sharpened tip.
+          From 0.10 to 0.14 it keeps the Campanile's shape and belfry window but takes on pencil
+          colors, with a wood-colored base and faceted sides. At 0.25 only faint vertical lines
+          are left.
+        </p>
+
+        <div class="sub-heading">Waterfall, &quot;a photo of a frozen waterfall in winter&quot;</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_frozen_original.jpg" alt="waterfall frozen original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_frozen_t0.02.jpg" alt="waterfall frozen text edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_frozen_t0.04.jpg" alt="waterfall frozen text edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_frozen_t0.06.jpg" alt="waterfall frozen text edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_frozen_t0.10.jpg" alt="waterfall frozen text edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_frozen_t0.14.jpg" alt="waterfall frozen text edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_frozen_t0.25.jpg" alt="waterfall frozen text edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_frozen_t0.50.jpg" alt="waterfall frozen text edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          This one works at every start time, because the prompt keeps the scene and only
+          changes the season. At 0.10 and 0.14 the falls turn to icicles and the rocks get snow,
+          while the cliff, the pool, the teal sky and even the autumn trees stay from my photo.
+          At 0.25 the frost is light and the water is still flowing.
+        </p>
+
+        <div class="sub-heading">Paella, &quot;a photo of a galaxy with planets and stars&quot;</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-4">
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_galaxy_original.jpg" alt="paella galaxy original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_galaxy_t0.02.jpg" alt="paella galaxy text edit t 0.02"></div><div class="result-label">t = 0.02</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_galaxy_t0.04.jpg" alt="paella galaxy text edit t 0.04"></div><div class="result-label">t = 0.04</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_galaxy_t0.06.jpg" alt="paella galaxy text edit t 0.06"></div><div class="result-label">t = 0.06</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_galaxy_t0.10.jpg" alt="paella galaxy text edit t 0.10"></div><div class="result-label">t = 0.10</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_galaxy_t0.14.jpg" alt="paella galaxy text edit t 0.14"></div><div class="result-label">t = 0.14</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_galaxy_t0.25.jpg" alt="paella galaxy text edit t 0.25"></div><div class="result-label">t = 0.25</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/p32_galaxy_t0.50.jpg" alt="paella galaxy text edit t 0.50"></div><div class="result-label">t = 0.50</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          My favorite. At 0.02 it's a generic galaxy, but from 0.04 the egg in the center becomes
+          a striped planet. By 0.10 the round pan becomes a circular frame of planets, and at 0.14
+          and 0.25 each topping turns into its own planet while the pan, spoon and black rice
+          (now a starry sky) stay in place.
+        </p>
+        <p class="part-answer">
+          Compared with 3.1, the low start times now follow the prompt instead of turning
+          everything into a portrait. The tradeoff is the same though. Low start times match the
+          prompt but lose the original, and high start times keep the original but ignore the
+          prompt. The best edits are in between, around 0.10 to 0.25, where both the prompt and
+          the structure show up.
+        </p>
+      </section>
+
+      <!-- ============================ 3.3 ============================ -->
+      <section id="part-3-3">
+        <div class="part-heading">
+          <span class="part-chip">PART 3.3</span>
+          <span class="part-title">Visual anagrams</span>
+        </div>
+        <p class="part-answer">
+          A visual anagram looks like one thing upright and another when rotated 180&deg;. At
+          every Euler step I get the CFG velocity for prompt a on the image, and the velocity for
+          prompt b on the rotated image, rotated back. Averaging the two pushes the image toward
+          a picture that works both ways. Both prompts share the same style so the two readings
+          can blend.
+        </p>
+        <pre class="code-block"><code>def visual_anagrams(noise, condition_a, condition_b, predict_velocity, w=7, step_size=0.02):
+  def velocity(x, t):
+    v1 = cfg_velocity(x, t, condition_a, w, predict_velocity, null_condition)
+    v2 = rotate180(cfg_velocity(rotate180(x), t, condition_b, w, predict_velocity, null_condition))
+    return (v1 + v2) / 2
+
+  final, _ = euler_sample(noise, 0, step_size, velocity)
+  return final</code></pre>
+
+        <div class="sub-heading">Jellyfish and a bowl of ramen</div>
+        <div class="film-strip" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p33_jellyfish.jpg" alt="anagram upright, jellyfish"></div><div class="result-label">upright<br><b>an oil painting of a jellyfish</b></div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/p33_ramen.jpg" alt="anagram rotated, bowl of ramen"></div><div class="result-label">rotated 180&deg;<br><b>an oil painting of a bowl of ramen</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          This one works both ways. Upright, the blue bell sits on top with orange tentacles
+          hanging down. Flipped, the bell becomes a blue bowl and the tentacles become noodles
+          piled on top. The shapes match under the rotation, so neither prompt has to give much
+          up.
+        </p>
+
+        <div class="sub-heading">Stadium of fans and a soccer player</div>
+        <div class="film-strip" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/p33_stadium.jpg" alt="anagram upright, stadium of fans"></div><div class="result-label">upright<br><b>an oil painting of a stadium full of cheering fans</b></div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/p33_player.jpg" alt="anagram rotated, soccer player"></div><div class="result-label">rotated 180&deg;<br><b>an oil painting of a soccer player in a light blue and white striped jersey</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          My tribute to Messi. Rotated, it's clearly a player in Argentina stripes with a crowd
+          behind him. Upright, the stands, field and fans read as a stadium, but the upside-down
+          face in the middle is still easy to spot, so the stadium view only half works. A face
+          is a strong structured subject, and the crowd bends around it instead of hiding it.
+        </p>
+      </section>
+
+      <!-- ============================ 3.4 ============================ -->
+      <section id="part-3-4">
+        <div class="part-heading">
+          <span class="part-chip">PART 3.4</span>
+          <span class="part-title">Hybrid images</span>
+        </div>
+        <p class="part-answer">
+          Like the hybrids in Project 02, but generated instead of combined from two photos. At
+          every Euler step I take the CFG velocity for both prompts on the same image, keep the
+          low frequencies of the far prompt and the high frequencies of the close one. The
+          low-pass is a Gaussian blur with &sigma; = 16 (kernel 265). Up close you see the
+          texture of prompt b, and from far away only the coarse shape of prompt a is left.
+        </p>
+        <pre class="code-block"><code>def make_hybrids(noise, condition_a, condition_b, predict_velocity, w=7, step_size=0.02):
+  def velocity(x, t):
+    v1 = cfg_velocity(x, t, condition_a, w, predict_velocity, null_condition)
+    v2 = cfg_velocity(x, t, condition_b, w, predict_velocity, null_condition)
+    return lowpass(v1) + (v2 - lowpass(v2))
+
+  final, _ = euler_sample(noise, 0, step_size, velocity)
+  return final</code></pre>
+
+        <div class="sub-heading">Lion's face (far) and tall grass in the savanna (close)</div>
+        <div class="distance-row">
+          <figure><img src="img/p34_lion_grass.jpg" alt="lion and grass hybrid, large" style="width:300px"><figcaption>close</figcaption></figure>
+          <figure><img src="img/p34_lion_grass.jpg" alt="lion and grass hybrid, small" style="width:64px"><figcaption>far</figcaption></figure>
+        </div>
+        <p class="part-answer">
+          Up close it's a lithograph of tall grass. From far away the orange mass and its rounded,
+          darker top read as a lion's mane. The face itself never shows up, but the color and
+          outline are enough to suggest a lion.
+        </p>
+
+        <div class="sub-heading">Owl's face (far) and a forest (close)</div>
+        <div class="distance-row">
+          <figure><img src="img/p34_owl_forest.jpg" alt="owl and forest hybrid, large" style="width:300px"><figcaption>close</figcaption></figure>
+          <figure><img src="img/p34_owl_forest.jpg" alt="owl and forest hybrid, small" style="width:64px"><figcaption>far</figcaption></figure>
+        </div>
+        <p class="part-answer">
+          Up close it's a clean forest engraving. From far away the forest sits in an oval head
+          shape with two pointed tips at the top like ear tufts. I hoped the big eyes would show
+          up as dark circles, but only the outline made it through, so this one is weaker.
+        </p>
+
+        <div class="sub-heading">What didn't work</div>
+        <div class="distance-row" style="flex-wrap:wrap">
+          <figure><img src="img/p34_hand_branches.jpg" alt="hand and branches attempt" style="width:200px"><figcaption>hand (far), branches (close)</figcaption></figure>
+          <figure><img src="img/p34_hand_branches.jpg" alt="hand and branches attempt, small" style="width:64px"><figcaption>far</figcaption></figure>
+          <figure><img src="img/p34_panda_bamboo.jpg" alt="panda and bamboo attempt" style="width:200px"><figcaption>panda (far), bamboo (close)</figcaption></figure>
+          <figure><img src="img/p34_panda_bamboo.jpg" alt="panda and bamboo attempt, small" style="width:64px"><figcaption>far</figcaption></figure>
+        </div>
+        <p class="part-answer">
+          My first two pairs only showed the close prompt at any size. A Gaussian with &sigma; = 16
+          keeps only shapes around 100 pixels and larger, so the far prompt can only contribute a
+          rough silhouette. A hand is defined by its fingers and a panda by its eye patches and
+          ears, and all of those are thinner than that. The bamboo also came out green, and since
+          color is low frequency it took over the far view too. Subjects with big bold features,
+          like a mane or a head outline, work much better.
+        </p>
+      </section>
+
+    </div>
+
+    <div class="page-footer">
+      <a href="../02/">← PREV</a>
+      <span class="disabled">NEXT: PROJECT 04</span>
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+  const links = document.querySelectorAll('.section-nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = '#' + entry.target.id;
+        links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === id));
+      }
+    });
+  }, { rootMargin: '-40% 0px -50% 0px' });
+  sections.forEach(s => s && observer.observe(s));
+</script>
+</body>
+</html>

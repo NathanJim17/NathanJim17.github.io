@@ -546,13 +546,16 @@ a { color: inherit; text-decoration: none; }
 }
 
 .frames.cols-3,
+.frames.cols-4,
 .frames.cols-5 {
   display: grid;
   gap: 14px;
 }
 .frames.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.frames.cols-4 { grid-template-columns: repeat(4, 1fr); }
 .frames.cols-5 { grid-template-columns: repeat(5, 1fr); }
 .frames.cols-3 > .result-tile,
+.frames.cols-4 > .result-tile,
 .frames.cols-5 > .result-tile { min-width: 0; }
 
 /* hybrid "viewed from far away": same image shown small */
