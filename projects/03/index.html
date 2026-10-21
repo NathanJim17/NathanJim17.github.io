@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Project 03A: Flow Models for Image Generation and Editing</title>
+<title>Project 03: Flow Models and Flow Matching</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../../css/site.css">
@@ -19,7 +19,7 @@
     </div>
 
     <a href="../../" class="back-index">← INDEX</a>
-    <div class="project-label">PROJECT 03A</div>
+    <div class="project-label">PROJECT 03</div>
 
     <nav class="section-nav">
       <a href="#part-1-1" class="active">· 1.1 noisy inputs</a>
@@ -34,6 +34,13 @@
       <a href="#part-3-2">· 3.2 text edits</a>
       <a href="#part-3-3">· 3.3 anagrams</a>
       <a href="#part-3-4">· 3.4 hybrids</a>
+      <a href="#b-1-1">· B 1.1 UNet</a>
+      <a href="#b-1-2">· B 1.2 noising</a>
+      <a href="#b-1-2-1">· B 1.2.1 denoiser</a>
+      <a href="#b-1-2-2">· B 1.2.2 OOD</a>
+      <a href="#b-1-2-3">· B 1.2.3 pure noise</a>
+      <a href="#b-2-3">· B 2 time cond.</a>
+      <a href="#b-2-6">· B 2 class cond.</a>
     </nav>
 
     <div class="next-link" style="visibility:hidden">next 04 →</div>
@@ -688,6 +695,305 @@ def euler_sample(x_start, t_start, step_size, velocity):
           ears, and all of those are thinner than that. The bamboo also came out green, and since
           color is low frequency it took over the far view too. Subjects with big bold features,
           like a mane or a head outline, work much better.
+        </p>
+      </section>
+
+    </div>
+
+    <!-- ============================ PART B ============================ -->
+    <div class="hero hero-yellow" id="part-b">
+      <div class="lens"><div class="lens-inner"></div></div>
+      <div>
+        <div class="hero-eyebrow">PROJECT 03 &middot; PART B</div>
+        <div class="hero-title">Flow Matching<br>from Scratch</div>
+      </div>
+      <span class="hero-url">nathanjim17.github.io</span>
+    </div>
+
+    <div class="summary">
+      In Part B I build and train my own models on MNIST. Part 1 trains a UNet to remove noise
+      in a single step, and shows why that can't generate new digits. Part 2 trains a flow
+      matching model that predicts the velocity from noise to data, first conditioned on time
+      only and then on time and the digit class, with classifier-free guidance.
+    </div>
+
+    <div class="body">
+
+      <!-- ============================ B 1.1 ============================ -->
+      <section id="b-1-1">
+        <div class="part-heading">
+          <span class="part-chip">PART B 1.1</span>
+          <span class="part-title">Implementing the UNet</span>
+        </div>
+        <p class="part-answer">
+          Each basic op is a convolution followed by BatchNorm and GELU. Conv keeps the size,
+          DownConv halves it with stride 2 and UpConv doubles it with a transposed convolution.
+          Two downsampling blocks take the 28&times;28 input to 7&times;7, Flatten averages that
+          to 1&times;1, and Unflatten brings it back. On the way up each block is concatenated
+          with the matching skip connection. With D hidden channels the widths go D, D, 2D at
+          the bottleneck, then back to D.
+        </p>
+        <pre class="code-block"><code>class Conv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU()
+        )
+
+# UnconditionalUNet.forward
+conv1 = self.ConvBlock1(x)                 # D,  28x28
+down1 = self.DownBlock1(conv1)             # D,  14x14
+down2 = self.DownBlock2(down1)             # 2D, 7x7
+bottleneck = self.unflatten(self.flatten(down2))
+up1 = self.UpBlock1(torch.cat((bottleneck, down2), dim=1))   # 4D -> D
+up2 = self.UpBlock2(torch.cat((up1, down1), dim=1))          # 2D -> D
+output = self.ConvBlock2(torch.cat((up2, conv1), dim=1))     # 2D -> D
+return self.conv2d(output)</code></pre>
+      </section>
+
+      <!-- ============================ B 1.2 ============================ -->
+      <section id="b-1-2">
+        <div class="part-heading">
+          <span class="part-chip">PART B 1.2</span>
+          <span class="part-title">Noising process</span>
+        </div>
+        <p class="part-answer">
+          The denoiser is trained on pairs of a clean digit x and a noisy copy
+          <code>z = x + &sigma;&epsilon;</code>. Here is one digit at &sigma; = 0, 0.2, 0.4, 0.5,
+          0.6, 0.8 and 1.0. By &sigma; = 1.0 the 5 is barely visible.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb12_noise_levels.png" alt="one digit at increasing noise levels"></div><div class="result-label">&sigma; = 0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+      </section>
+
+      <!-- ============================ B 1.2.1 ============================ -->
+      <section id="b-1-2-1">
+        <div class="part-heading">
+          <span class="part-chip">PART B 1.2.1</span>
+          <span class="part-title">Training the denoiser</span>
+        </div>
+        <p class="part-answer">
+          I trained the UNet with D = 128 to denoise &sigma; = 0.5 for 5 epochs, with Adam at a
+          learning rate of 1e-4 and batch size 256. Noise is drawn fresh every time a batch is
+          loaded, so the model never sees the same noisy image twice.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb121_epoch1.png" alt="denoising results after epoch 1"></div><div class="result-label">after epoch 1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/pb121_epoch5.png" alt="denoising results after epoch 5"></div><div class="result-label">after epoch 5</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb121_loss.png" alt="denoiser training loss"></div><div class="result-label">training loss</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The test digits are already readable after one epoch, with some faint speckle left
+          around the strokes. After five epochs the strokes are smoother and the background is
+          clean. The loss falls steeply in the first hundred steps and then keeps creeping down.
+        </p>
+      </section>
+
+      <!-- ============================ B 1.2.2 ============================ -->
+      <section id="b-1-2-2">
+        <div class="part-heading">
+          <span class="part-chip">PART B 1.2.2</span>
+          <span class="part-title">Out-of-distribution testing</span>
+        </div>
+        <p class="part-caption">Rows come in pairs, noisy then denoised, for &sigma; = 0, 0.2, 0.4, 0.5, 0.6, 0.8 and 1.0 from top to bottom. The same eight test digits are used throughout.</p>
+        <div class="film-strip" style="margin-top:14px;max-width:460px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb122_ood.png" alt="denoiser on noise levels from 0 to 1.0"></div><div class="result-label">trained at &sigma; = 0.5</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The model was only trained at &sigma; = 0.5, but it handles anything up to about 0.6
+          almost perfectly, including the clean images at &sigma; = 0. At 0.8 most digits are still
+          right but some strokes come out faint or broken. At 1.0 it falls apart and invents extra
+          strokes, so a 1 or a 4 turns into a scribble. With more noise than it was trained on, it
+          starts treating some of the noise as part of the digit.
+        </p>
+      </section>
+
+      <!-- ============================ B 1.2.3 ============================ -->
+      <section id="b-1-2-3">
+        <div class="part-heading">
+          <span class="part-chip">PART B 1.2.3</span>
+          <span class="part-title">Denoising pure noise</span>
+        </div>
+        <p class="part-answer">
+          Same setup, but the input is pure Gaussian noise and the target is a random clean digit.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb123_epoch1.png" alt="pure noise denoising after epoch 1"></div><div class="result-label">after epoch 1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/pb123_epoch5.png" alt="pure noise denoising after epoch 5"></div><div class="result-label">after epoch 5</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb123_loss.png" alt="pure noise denoiser training loss"></div><div class="result-label">training loss</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Every output is the same blurry blob no matter what noise goes in. It looks like a 0, 8
+          and 9 drawn on top of each other. The noise carries no information about the digit, so
+          the best the model can do under MSE is predict the point closest to all training
+          images at once, which is their average. That average is easy to learn, so the result
+          is already there after one epoch and the loss goes flat at about 0.07 within the first
+          hundred steps. This is why one step of denoising can't generate new digits.
+        </p>
+      </section>
+
+      <!-- ============================ B 2.1-2.3 ============================ -->
+      <section id="b-2-3">
+        <div class="part-heading">
+          <span class="part-chip">PART B 2.1 to 2.3</span>
+          <span class="part-title">Time-conditioned flow matching</span>
+        </div>
+        <p class="part-answer">
+          Instead of jumping straight to a clean digit, the UNet now predicts the velocity
+          <code>x<sub>1</sub> &minus; x<sub>0</sub></code> at a noisy point
+          <code>x<sub>t</sub> = (1&minus;t)x<sub>0</sub> + t&middot;x<sub>1</sub></code>, the same
+          idea as the pretrained model in Part A. The time t is embedded with two FCBlocks that
+          scale the bottleneck and the first upsampling block. I trained it for 10 epochs with
+          D = 64, batch size 64 and Adam starting at 1e-2, with an exponential schedule that
+          decays the learning rate to 1e-3 by the end.
+        </p>
+        <pre class="code-block"><code>def time_fm_forward(unet, x_1, num_ts):
+    t = torch.rand(x_1.shape[0], device=x_1.device)
+    x_0 = torch.randn_like(x_1)
+    t_view = t.view(-1, 1, 1, 1)
+    x_t = (1 - t_view) * x_0 + t_view * x_1
+    return F.mse_loss(unet(x_t, t), x_1 - x_0)</code></pre>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb22_loss.png" alt="time-conditioned training loss"></div><div class="result-label">training loss, 10 epochs</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The loss starts very high, around 13, because the untrained network's outputs are far
+          from the target velocity. It drops below 1 within the first few hundred
+          steps and then slowly settles. The spike squashes the rest of the curve, so the slow
+          improvement after that is hard to see on this scale.
+        </p>
+        <div class="sub-heading">Samples after 1, 5 and 10 epochs</div>
+        <p class="part-caption">50 Euler steps from pure noise, with the same seed at every checkpoint so each cell starts from the same noise.</p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames cols-3">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb23_epoch1.png" alt="time-conditioned samples after epoch 1"></div><div class="result-label">epoch 1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/pb23_epoch5.png" alt="time-conditioned samples after epoch 5"></div><div class="result-label">epoch 5</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/pb23_epoch10.png" alt="time-conditioned samples after epoch 10"></div><div class="result-label"><b>epoch 10</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          After one epoch the model only makes stroke-like squiggles with no recognizable
+          digits. By epoch 5 most samples are real digits, and by epoch 10 a few more of the
+          broken ones become readable and the strokes are cleaner. Because the seed is fixed,
+          the same cell usually ends up as the same digit at epochs 5 and 10, like the 7, the
+          3 and the 0. Some samples are still malformed blobs or mix two digits together.
+          The model has no idea which digit it is supposed to draw, so a sample that starts
+          halfway between two digits can stay stuck in between.
+        </p>
+      </section>
+
+      <!-- ============================ B 2.4-2.6 ============================ -->
+      <section id="b-2-6">
+        <div class="part-heading">
+          <span class="part-chip">PART B 2.4 to 2.6</span>
+          <span class="part-title">Class-conditioned flow matching</span>
+        </div>
+        <p class="part-answer">
+          To control which digit comes out, the UNet also takes the class as a one-hot vector.
+          Two more FCBlocks embed it, and the class scales each feature map while the time
+          shifts it. 10% of the time during training the class vector is set to zero, so the
+          same model also learns an unconditional velocity. At sampling time I combine the two
+          with classifier-free guidance, <code>u = u<sub>uncond</sub> + &gamma;(u<sub>cond</sub> &minus; u<sub>uncond</sub>)</code>
+          with &gamma; = 5 and 300 Euler steps.
+        </p>
+        <pre class="code-block"><code># modulation inside ClassConditionalUNet.forward
+unflatten = c1 * unflatten + t1
+up1 = c2 * up1 + t2
+
+# one Euler step of class_fm_sample, both passes in one batch
+v_pred = unet(torch.cat([x_t, x_t]), c_double, t_double, mask_double)
+v_cond, v_uncond = torch.chunk(v_pred, 2, dim=0)
+v_gamma = v_uncond + guidance_scale * (v_cond - v_uncond)
+x_t = x_t + v_gamma * dt</code></pre>
+
+        <div class="sub-heading">Training loss</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb25_loss_sched.png" alt="class-conditioned training loss with scheduler"></div><div class="result-label">with scheduler, lr 1e-2 decaying to 1e-3</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/pb25_loss_nosched.png" alt="class-conditioned training loss without scheduler"></div><div class="result-label">no scheduler, constant lr 1e-3</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Both runs drop quickly in the first few hundred steps and then level off around 0.1.
+          The scheduled run's plot is squashed by a large spike at the very start, so its slow
+          improvement afterwards is hard to see. The run without a scheduler has a smaller
+          y-axis, which shows that it keeps creeping down slowly through all 10 epochs.
+        </p>
+
+        <div class="sub-heading">Samples after 1, 5 and 10 epochs</div>
+        <p class="part-caption">Four samples of each digit, &gamma; = 5, 300 Euler steps, same seed at every checkpoint.</p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile"><div class="frame fit"><img src="img/pb26_sched_epoch1.png" alt="class-conditioned samples after epoch 1"></div><div class="result-label">epoch 1</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/pb26_sched_epoch5.png" alt="class-conditioned samples after epoch 5"></div><div class="result-label">epoch 5</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/pb26_sched_epoch10.png" alt="class-conditioned samples after epoch 10"></div><div class="result-label"><b>epoch 10</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Class conditioning makes a huge difference. Even after one epoch every column is the
+          right digit, just blotchy, with the 4s, 5s and 9s the roughest. After five epochs
+          almost all 40 are clean, with only a broken 5 and 7 in the second row. After ten
+          epochs all 40 are clean and still vary in slant and thickness within each column.
+          Compared with the time-only model, knowing the class means a sample never gets stuck
+          between two digits, so it converges much faster.
+        </p>
+
+        <div class="sub-heading">Removing the learning rate scheduler</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/pb26_nosched_epoch10.png" alt="class-conditioned samples after epoch 10 without scheduler"></div><div class="result-label"><b>no scheduler, epoch 10, constant lr 1e-3</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The scheduler starts at 1e-2 and decays to 1e-3. Keeping 1e-2 the whole time would
+          take steps that are too big near the end, so to compensate I used a constant learning
+          rate of 1e-3, the value the scheduler ends at. Training is a little slower at the start
+          but more stable, and with the same 10 epochs the results match the scheduled model.
+          All 40 digits are readable and about as clean, with only slightly rougher edges on a
+          couple, like the 8 in the first row and the 4 in the last.
         </p>
       </section>
 
