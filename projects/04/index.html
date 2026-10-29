@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project 04: Image Warping and Mosaicing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../css/site.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="film-bars">
+      <span style="background: var(--red)"></span>
+      <span style="background: var(--yellow)"></span>
+      <span style="background: var(--blue)"></span>
+    </div>
+
+    <a href="../../" class="back-index">← INDEX</a>
+    <div class="project-label">PROJECT 04</div>
+
+    <nav class="section-nav">
+      <a href="#part-a1" class="active">· A.1 pictures</a>
+      <a href="#part-a2">· A.2 homographies</a>
+      <a href="#part-a3">· A.3 warping</a>
+      <a href="#part-a4">· A.4 mosaics</a>
+    </nav>
+
+    <div class="next-link" style="visibility:hidden">next 05 →</div>
+  </aside>
+
+  <main class="main" style="padding:0">
+
+    <div class="hero hero-red">
+      <div class="lens"><div class="lens-inner"></div></div>
+      <div>
+        <div class="hero-eyebrow">PROJECT 04 &middot; PART A</div>
+        <div class="hero-title">Image Warping<br>and Mosaicing</div>
+      </div>
+      <span class="hero-url">nathanjim17.github.io</span>
+    </div>
+
+    <div class="summary">
+      This project stitches photos into panoramas. When the camera only rotates, every pair of
+      photos is related by a homography, a 3&times;3 projective transform. I recover homographies
+      from clicked point pairs with least squares, write inverse warping with nearest neighbor
+      and bilinear interpolation from scratch, test it by rectifying flat signs and screens, and
+      blend three mosaics with feathering and two-band blending.
+    </div>
+
+    <div class="body">
+
+      <!-- ============================ A.1 ============================ -->
+      <section id="part-a1">
+        <div class="part-heading">
+          <span class="part-chip">PART A.1</span>
+          <span class="part-title">Shooting the pictures</span>
+        </div>
+        <p class="part-answer">
+          All three sets are frames pulled from phone videos where I turned in place. I picked
+          sharp frames with about 40 to 65% overlap and skipped stretches where auto exposure
+          jumped. Distant scenes help, since a little hand movement causes almost no parallax
+          when everything is far away.
+        </p>
+
+        <div class="sub-heading">Zion, from Angels Landing</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a1_zion_left.jpg" alt="zion left frame"></div><div class="result-label">left<br><b>0.5 s</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a1_zion_mid.jpg" alt="zion middle frame"></div><div class="result-label">middle<br><b>2.5 s</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a1_zion_right.jpg" alt="zion right frame"></div><div class="result-label">right<br><b>4.0 s</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+
+        <div class="sub-heading">San Francisco, through a window</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a1_sf_left.jpg" alt="sf left frame"></div><div class="result-label">left<br><b>3.2 s</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a1_sf_right.jpg" alt="sf right frame"></div><div class="result-label">right<br><b>5.2 s</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          This one was shot through a high-rise window. Both frames come from a stretch where the
+          camera stayed behind one pane, so the window frames and the different tints of
+          neighboring panes stay out of the overlap.
+        </p>
+
+        <div class="sub-heading">Kinkaku-ji</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a1_kinkaku_left.jpg" alt="kinkaku-ji left frame"></div><div class="result-label">left<br><b>1.5 s</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a1_kinkaku_mid.jpg" alt="kinkaku-ji middle frame"></div><div class="result-label">middle<br><b>3.5 s</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a1_kinkaku_right.jpg" alt="kinkaku-ji right frame"></div><div class="result-label">right<br><b>5.5 s</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          This set has the most foreground, a pine bush, shrubs and bare branches close to the
+          camera, plus a pond whose ripples change between frames. I kept clicked points off all
+          of those.
+        </p>
+      </section>
+
+      <!-- ============================ A.2 ============================ -->
+      <section id="part-a2">
+        <div class="part-heading">
+          <span class="part-chip">PART A.2</span>
+          <span class="part-title">Recovering homographies</span>
+        </div>
+        <p class="part-answer">
+          A homography maps a point p = (x, y, 1) in image 1 to Hp = (x', y', w) in image 2, and
+          dividing by w gives the pixel location. Fixing the bottom right entry to 1 leaves 8
+          unknowns, a through h. Each point pair gives two equations, but they have the
+          denominator gx + hy + 1 in them. Multiplying it out and moving every term with an
+          unknown to one side makes them linear.
+        </p>
+        <pre class="code-block"><code>x'(gx + hy + 1) = ax + by + c   -&gt;   [x  y  1  0  0  0  -x'x  -x'y] h = x'
+y'(gx + hy + 1) = dx + ey + f   -&gt;   [0  0  0  x  y  1  -y'x  -y'y] h = y'</code></pre>
+        <p class="part-answer">
+          Stacking two rows per pair gives A h = b with A of size 2n &times; 8. Four pairs would
+          solve it exactly, but clicks are off by a pixel or two, so I click 10 to 12 pairs and
+          solve the overdetermined system with least squares.
+        </p>
+        <p class="part-answer">
+          As a check, I made up an H, sent 10 random points through it and recovered it to within
+          1.4e-10. With 1 px of noise added to the targets, the mean error against the true
+          points was 0.48 px, below the noise itself because least squares averages over 20
+          equations.
+        </p>
+
+        <div class="sub-heading">Correspondences</div>
+        <p class="part-answer">
+          The middle frame is the reference for Zion and Kinkaku-ji, so each side frame gets its
+          own H into the middle. SF only has two frames, so the left one maps into the right.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile"><div class="frame fit"><img src="img/a2_zion_left_mid.jpg" alt="zion left to middle correspondences"></div><div class="result-label">zion left &rarr; middle<br><b>12 pairs</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a2_zion_right_mid.jpg" alt="zion right to middle correspondences"></div><div class="result-label">zion right &rarr; middle<br><b>12 pairs</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a2_sf_left_right.jpg" alt="sf left to right correspondences"></div><div class="result-label">sf left &rarr; right<br><b>12 pairs</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a2_kinkaku_left_mid.jpg" alt="kinkaku-ji left to middle correspondences"></div><div class="result-label">kinkaku-ji left &rarr; middle<br><b>10 pairs</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a2_kinkaku_right_mid.jpg" alt="kinkaku-ji right to middle correspondences"></div><div class="result-label">kinkaku-ji right &rarr; middle<br><b>10 pairs</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+
+        <div class="sub-heading">The system for Zion left &rarr; middle</div>
+        <p class="part-answer">
+          A is 24 &times; 8 for 12 pairs. These are the rows from the first two pairs. The g and h
+          columns are much bigger than the rest because they multiply two pixel coordinates.
+        </p>
+        <pre class="code-block"><code>A[:4] =
+[[ 657.47  644.91  1.     0.      0.      0.    -74971.84  -73540.11]
+ [   0.      0.    0.   657.47  644.91   1.   -430755.96 -422529.84]
+ [ 893.41  637.22  1.     0.      0.      0.   -326413.90 -232813.36]
+ [   0.      0.    0.   893.41  637.22   1.   -592210.55 -422391.72]]
+b[:4] = [114.03  655.17  365.36  662.87]</code></pre>
+
+        <div class="sub-heading">Recovered homographies</div>
+        <pre class="code-block"><code>zion left -&gt; middle                  zion right -&gt; middle
+[[ 1.31694  0.03227 -760.52976]      [[ 0.87877  0.02352  366.98805]
+ [ 0.20096  1.22195 -150.06127]       [-0.12975  1.03949  -17.00874]
+ [ 0.00025  0.00001    1.     ]]      [-0.00014  0.00005    1.     ]]
+
+sf left -&gt; right
+[[ 2.12053 -0.02052 -1143.49607]
+ [ 1.03367  1.83706  -795.81364]
+ [ 0.00106 -0.00001     1.     ]]
+
+kinkaku-ji left -&gt; middle            kinkaku-ji right -&gt; middle
+[[ 1.30074  0.02585 -550.26889]      [[ 0.67353  0.03853  466.62908]
+ [ 0.19239  1.25969 -186.58912]       [-0.29697  0.94336   73.81775]
+ [ 0.00023  0.00005    1.     ]]      [-0.00031  0.00002    1.     ]]</code></pre>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <tr><th>Pair</th><th>pairs</th><th>mean error</th><th>max error</th><th>focal length</th><th>rotation</th></tr>
+            <tr><td>zion left &rarr; middle</td><td>12</td><td>6.67 px</td><td>11.37 px</td><td>1610 px</td><td>18.8&deg;</td></tr>
+            <tr><td>zion right &rarr; middle</td><td>12</td><td>3.86 px</td><td>7.95 px</td><td>1520 px</td><td>12.9&deg;</td></tr>
+            <tr><td>sf left &rarr; right</td><td>12</td><td>2.11 px</td><td>3.75 px</td><td>900 px</td><td>31.6&deg;</td></tr>
+            <tr><td>kinkaku-ji left &rarr; middle</td><td>10</td><td>3.62 px</td><td>5.89 px</td><td>1385 px</td><td>15.6&deg;</td></tr>
+            <tr><td>kinkaku-ji right &rarr; middle</td><td>10</td><td>2.82 px</td><td>4.01 px</td><td>1145 px</td><td>22.6&deg;</td></tr>
+          </table>
+        </div>
+        <p class="part-caption">
+          Error is the reprojection error of the clicked points. Focal length and rotation come
+          from searching for the f that makes K<sup>&minus;1</sup>HK closest to a rotation
+          matrix, since a pure camera rotation gives H = KRK<sup>&minus;1</sup>.
+        </p>
+        <p class="part-answer">
+          The SF homography has a perspective term g about four times bigger than the others,
+          which first looked like a bad fit. The focal length check explains it. The SF video was
+          shot with a much wider field of view, so the same 520 px shift is a 32&deg; turn
+          instead of about 19&deg;, and a bigger turn means stronger perspective. Its H is
+          actually the closest to a pure rotation of all five. Zion left has the highest error
+          even after re-clicking, and the error is spread across all the points rather than one
+          bad click, which points to video stabilization slightly warping each frame.
+        </p>
+        <p class="part-answer">
+          Two lessons came out of clicking. Points on water or right at the image edge are
+          unreliable, and removing two of them in Kinkaku-ji right dropped its error from 7.3 to
+          2.8 px. And a low error only means H fits the clicked points. My first SF points sat in
+          a narrow strip, so H fit them but could bend freely everywhere else.
+        </p>
+      </section>
+
+      <!-- ============================ A.3 ============================ -->
+      <section id="part-a3">
+        <div class="part-heading">
+          <span class="part-chip">PART A.3</span>
+          <span class="part-title">Warping and rectification</span>
+        </div>
+        <p class="part-answer">
+          Warping uses inverse mapping. The four image corners go through H to find the output
+          box, since a homography keeps lines straight and the warped image can't leave the
+          quadrilateral they form. Then every output pixel goes back through H<sup>&minus;1</sup>
+          to find where it comes from in the source. Each output pixel gets exactly one lookup,
+          so there are no holes. The whole grid is mapped at once with numpy, with no per pixel
+          loops.
+        </p>
+        <p class="part-answer">
+          The source location is almost never a whole pixel, and the two methods differ only in
+          how they read it. Nearest neighbor rounds to the closest pixel. Bilinear takes the four
+          pixels around the point and blends them by distance, first along x and then along y.
+          Both also return an alpha mask that is 1 where the point landed inside the image, which
+          A.4 uses for blending.
+        </p>
+
+        <div class="sub-heading">Rectification</div>
+        <p class="part-answer">
+          With one photo, the second set of points comes from what I know about the scene. I
+          click the four corners of something rectangular and ask H to send them to a perfect
+          w &times; h rectangle. The monitor is 16:9, so it gets 800 &times; 450. For the Glico
+          board I guessed 400 &times; 700 and checked that the runner came out with normal
+          proportions.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a3_glico_original.jpg" alt="glico sign original"></div><div class="result-label">original</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a3_glico_nn.jpg" alt="glico rectified nearest neighbor"></div><div class="result-label">nearest</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/a3_glico_bilinear.jpg" alt="glico rectified bilinear"></div><div class="result-label"><b>bilinear</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile"><div class="frame fit"><img src="img/a3_xray_original.jpg" alt="x-ray on monitor original"></div><div class="result-label">original</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/a3_xray_bilinear.jpg" alt="x-ray monitor rectified bilinear"></div><div class="result-label"><b>bilinear, 16:9</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Both come out face-on. The Glico board is an upright rectangle and the runner looks
+          normal. The monitor has a level taskbar and square window corners, and the x-ray is
+          symmetric. The black wedges are output pixels that map outside the original photo.
+        </p>
+        <p class="part-answer">
+          The first Glico run ran out of memory. The photo looks up at the board, and its top
+          right corner is sky that is almost parallel to the board's surface. Once the board faces
+          the camera that corner is near the vanishing line, its w is 0.06, and dividing by it
+          throws the corner about 15,000 px away. Fitting the output box around every corner
+          asked for a 15,031 &times; 14,083 image. For rectification I instead keep the target
+          rectangle plus half its size of margin on each side.
+        </p>
+
+        <div class="sub-heading">Nearest neighbor vs bilinear</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit pixel"><img src="img/a3_glico_zoom.png" alt="glico logo zoomed, nearest left and bilinear right"></div><div class="result-label">glico logo<br><b>nearest | bilinear</b></div></div>
+            <div class="result-tile"><div class="frame fit pixel"><img src="img/a3_xray_zoom.png" alt="taskbar zoomed, nearest left and bilinear right"></div><div class="result-label">taskbar<br><b>nearest | bilinear</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-caption">60 &times; 60 crops from the most stretched parts, enlarged 6&times; with no smoothing.</p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <tr><th>Image</th><th>output size</th><th>nearest</th><th>bilinear</th></tr>
+            <tr><td>glico</td><td>800 &times; 1400</td><td>0.20 s</td><td>0.66 s</td></tr>
+            <tr><td>x-ray</td><td>1600 &times; 900</td><td>0.23 s</td><td>0.71 s</td></tr>
+            <tr><td>zion left &rarr; middle</td><td>1322 &times; 2293</td><td>0.79 s</td><td>2.55 s</td></tr>
+          </table>
+        </div>
+        <p class="part-answer">
+          Nearest neighbor copies one pixel per output pixel, so wherever the warp magnifies, each
+          source pixel turns into a block and edges become stair steps, like on the red script and
+          the search bar text. Bilinear is smooth but a little softer. It reads four pixels and does
+          three blends per output pixel, which makes it about 3.2&times; slower on every image.
+          That is still only a few seconds at most, so I use bilinear for the mosaics.
+        </p>
+      </section>
+
+      <!-- ============================ A.4 ============================ -->
+      <section id="part-a4">
+        <div class="part-heading">
+          <span class="part-chip">PART A.4</span>
+          <span class="part-title">Blending into a mosaic</span>
+        </div>
+        <p class="part-answer">
+          I warp everything in one shot. The reference frame stays put with H = identity, the
+          canvas is the union of every image's output box, and each image is warped onto that
+          same canvas so they line up pixel for pixel. Every image also gets a feather weight,
+          its distance to the nearest image edge normalized to 1 at the center. The weight is
+          warped with the same H as its image and multiplied by alpha, so it is 0 off the image.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_zion_weight_0.jpg" alt="zion left warped weight"></div><div class="result-label">left weight</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_zion_weight_1.jpg" alt="zion right warped weight"></div><div class="result-label">right weight</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_zion_weight_2.jpg" alt="zion middle weight"></div><div class="result-label">middle weight</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          I compare three blends. Overwrite just pastes each image over the last, for reference.
+          Feathering is the weighted average &Sigma;w<sub>i</sub>im<sub>i</sub> / &Sigma;w<sub>i</sub>.
+          Two-band blending splits each image with a Gaussian blur at &sigma; = 3. The blurry low
+          band is feathered and the high band, the fine detail, comes only from the image with the
+          biggest weight at each pixel. Where only one image covers a pixel the result is exactly
+          that image.
+        </p>
+        <pre class="code-block"><code>def blend_feather(warped, weights):
+    total = sum(weights)
+    weighted = sum(wt[..., None] * im for im, wt in zip(warped, weights))
+    out = np.zeros_like(weighted)
+    covered = total &gt; 0
+    out[covered] = weighted[covered] / total[covered][:, None]
+    return out
+
+
+def blend_two_band(warped, weights, sigma=3):
+    lows = [gaussian_filter(im, sigma=(sigma, sigma, 0)) for im in warped]
+    highs = [im - low for im, low in zip(warped, lows)]
+    low_band = blend_feather(lows, weights)
+    best = np.argmax(np.stack(weights), axis=0)
+    high_band = np.zeros_like(low_band)
+    for i, high in enumerate(highs):
+        high_band[best == i] = high[best == i]
+    covered = sum(weights) &gt; 0
+    return (low_band + high_band) * covered[..., None]</code></pre>
+
+        <div class="sub-heading">Zion</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_zion_overwrite.jpg" alt="zion mosaic overwrite"></div><div class="result-label">overwrite</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_zion_feather.jpg" alt="zion mosaic feathered"></div><div class="result-label">feather</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/a4_zion_two_band.jpg" alt="zion mosaic two-band"></div><div class="result-label"><b>two-band</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_zion_crop_feather.jpg" alt="zion overlap crop feathered"></div><div class="result-label">feather</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/a4_zion_crop_two_band.jpg" alt="zion overlap crop two-band"></div><div class="result-label"><b>two-band</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Overwrite leaves a lighter rectangle in the sky where the middle frame starts, because
+          each frame's exposure was a little different. Feathering removes it, but the left
+          overlap is about 6.7 px off, so averaging two shifted copies leaves a faint second cloud
+          and doubled cliff texture. Two-band keeps the smooth sky and takes the detail from one
+          frame, so the cloud and cliff stay sharp.
+        </p>
+
+        <div class="sub-heading">San Francisco</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_sf_overwrite.jpg" alt="sf mosaic overwrite"></div><div class="result-label">overwrite</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_sf_feather.jpg" alt="sf mosaic feathered"></div><div class="result-label">feather</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/a4_sf_two_band.jpg" alt="sf mosaic two-band"></div><div class="result-label"><b>two-band</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The overlap lines up within about 2 px, so all three blends look close. The left frame
+          is rotated 32&deg; from the reference and a planar mosaic stretches it into a wedge
+          about 3,600 px tall. Flat projection stretches more the further a ray is from the
+          reference's center and blows up at 90&deg;, which is why wide panoramas usually use a
+          cylinder instead. The dark strip on the far left is the window frame.
+        </p>
+
+        <div class="sub-heading">Kinkaku-ji</div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_kinkaku_overwrite.jpg" alt="kinkaku-ji mosaic overwrite"></div><div class="result-label">overwrite</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_kinkaku_feather.jpg" alt="kinkaku-ji mosaic feathered"></div><div class="result-label">feather</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/a4_kinkaku_two_band.jpg" alt="kinkaku-ji mosaic two-band"></div><div class="result-label"><b>two-band</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/a4_kinkaku_crop_feather.jpg" alt="kinkaku-ji branches crop feathered"></div><div class="result-label">feather</div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/a4_kinkaku_crop_two_band.jpg" alt="kinkaku-ji branches crop two-band"></div><div class="result-label"><b>two-band</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The pavilion, pine island and far trees line up, and feathering removes the bright sky
+          rectangles from overwrite. The bare branches in the lower right are close to the camera,
+          so parallax puts them in a different place in each frame. Feathering averages branch
+          with water and they turn see-through. Two-band takes them from one frame and they stay
+          solid.
+        </p>
+      </section>
+
+    </div>
+
+    <div class="page-footer">
+      <a href="../03/">← PREV</a>
+      <span class="disabled">NEXT: PROJECT 05</span>
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+  const links = document.querySelectorAll('.section-nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = '#' + entry.target.id;
+        links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === id));
+      }
+    });
+  }, { rootMargin: '-40% 0px -50% 0px' });
+  sections.forEach(s => s && observer.observe(s));
+</script>
+</body>
+</html>
