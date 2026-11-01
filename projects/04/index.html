@@ -26,6 +26,10 @@
       <a href="#part-a2">· A.2 homographies</a>
       <a href="#part-a3">· A.3 warping</a>
       <a href="#part-a4">· A.4 mosaics</a>
+      <a href="#part-b1">· B.1 corners</a>
+      <a href="#part-b2">· B.2 descriptors</a>
+      <a href="#part-b3">· B.3 matching</a>
+      <a href="#part-b4">· B.4 autostitching</a>
     </nav>
 
     <div class="next-link" style="visibility:hidden">next 05 →</div>
@@ -36,7 +40,7 @@
     <div class="hero hero-red">
       <div class="lens"><div class="lens-inner"></div></div>
       <div>
-        <div class="hero-eyebrow">PROJECT 04 &middot; PART A</div>
+        <div class="hero-eyebrow">PROJECT 04 &middot; PARTS A + B</div>
         <div class="hero-title">Image Warping<br>and Mosaicing</div>
       </div>
       <span class="hero-url">nathanjim17.github.io</span>
@@ -47,7 +51,8 @@
       photos is related by a homography, a 3&times;3 projective transform. I recover homographies
       from clicked point pairs with least squares, write inverse warping with nearest neighbor
       and bilinear interpolation from scratch, test it by rectifying flat signs and screens, and
-      blend three mosaics with feathering and two-band blending.
+      blend three mosaics with feathering and two-band blending. Part B finds the homographies
+      automatically with Harris corners, MOPS descriptors, ratio test matching and RANSAC.
     </div>
 
     <div class="body">
@@ -418,6 +423,201 @@ def blend_two_band(warped, weights, sigma=3):
           so parallax puts them in a different place in each frame. Feathering averages branch
           with water and they turn see-through. Two-band takes them from one frame and they stay
           solid.
+        </p>
+      </section>
+
+      <!-- ============================ B.1 ============================ -->
+      <section id="part-b1">
+        <div class="part-heading">
+          <span class="part-chip">PART B.1</span>
+          <span class="part-title">Harris corners and ANMS</span>
+        </div>
+        <p class="part-answer">
+          Part B follows the MOPS paper by Brown, Szeliski and Winder, simplified to one scale and
+          no rotation. The course's Harris detector keeps every local maximum with no strength
+          threshold, which gives 41,000 to 51,000 corners per image.
+        </p>
+        <p class="part-answer">
+          Adaptive non-maximal suppression keeps 500 corners that are strong and spread out. Each
+          corner's radius is the distance to the nearest corner it is less than 0.9 times as
+          strong as, and the 500 largest radii are kept. Only the 5,000 strongest corners go in,
+          which keeps the distance matrix small and drops the noise in the sky.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/b1_zion_mid_harris.jpg" alt="zion middle all harris corners"></div><div class="result-label">all Harris<br><b>44,369</b></div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/b1_zion_mid_anms.jpg" alt="zion middle corners after anms"></div><div class="result-label">after ANMS<br><b>500</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/b1_sf_left_anms.jpg" alt="sf left corners after anms"></div><div class="result-label">sf left<br><b>500</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/b1_kinkaku_right_anms.jpg" alt="kinkaku-ji right corners after anms"></div><div class="result-label">kinkaku-ji right<br><b>500</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          After ANMS the corners spread across the cliffs, buildings and trees, with none in the
+          sky. Kinkaku-ji also gets corners on water ripples and the close bare branches.
+        </p>
+      </section>
+
+      <!-- ============================ B.2 ============================ -->
+      <section id="part-b2">
+        <div class="part-heading">
+          <span class="part-chip">PART B.2</span>
+          <span class="part-title">Feature descriptors</span>
+        </div>
+        <p class="part-answer">
+          Each corner gets an 8 &times; 8 descriptor sampled every 5 px from the 40 &times; 40
+          window around it, after a Gaussian blur with &sigma; = 2.5 so the samples don't alias.
+          Each descriptor is normalized to mean 0 and standard deviation 1, which removes
+          brightness and contrast differences between frames.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/b2_zion_mid_examples.jpg" alt="zion middle descriptor examples"></div><div class="result-label">zion middle</div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/b2_sf_left_examples.jpg" alt="sf left descriptor examples"></div><div class="result-label">sf left</div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-caption">Each row shows the raw 40 &times; 40 window and its normalized 8 &times; 8 descriptor.</p>
+        <p class="part-answer">
+          SF #0 is a grid of identical windows. After the blur only the dark column on the left
+          remains, so corners on repeated facades get near identical descriptors.
+        </p>
+      </section>
+
+      <!-- ============================ B.3 ============================ -->
+      <section id="part-b3">
+        <div class="part-heading">
+          <span class="part-chip">PART B.3</span>
+          <span class="part-title">Feature matching</span>
+        </div>
+        <p class="part-answer">
+          For each descriptor I find its nearest and second nearest neighbor in the other image
+          and keep the match only if the ratio of the two distances is below 0.6. An ambiguous
+          feature, like one of many identical windows, has two neighbors at almost the same
+          distance and gets rejected.
+        </p>
+        <div class="film-strip wide" style="margin:14px auto 0; max-width:560px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/b3_zion_left_ratios.jpg" alt="histogram of nearest to second nearest ratios for zion left"></div><div class="result-label">zion left &rarr; middle<br><b>1-NN / 2-NN ratio</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          Like Fig. 6b in the paper, real matches cluster from 0.15 to 0.5 and unmatched corners
+          pile up near 1, with almost nothing in between.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile"><div class="frame fit"><img src="img/b3_zion_left_zion_mid.jpg" alt="zion left to middle matches"></div><div class="result-label">zion left &rarr; middle<br><b>137 matches</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/b3_sf_left_sf_right.jpg" alt="sf left to right matches"></div><div class="result-label">sf left &rarr; right<br><b>45 matches</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/b3_kinkaku_right_kinkaku_mid.jpg" alt="kinkaku-ji right to middle matches"></div><div class="result-label">kinkaku-ji right &rarr; middle<br><b>94 matches</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <tr><th>Pair</th><th>matches of 500</th><th>median ratio</th></tr>
+            <tr><td>zion left &rarr; middle</td><td>137</td><td>0.92</td></tr>
+            <tr><td>zion right &rarr; middle</td><td>110</td><td>0.93</td></tr>
+            <tr><td>sf left &rarr; right</td><td>45</td><td>0.94</td></tr>
+            <tr><td>kinkaku-ji left &rarr; middle</td><td>117</td><td>0.92</td></tr>
+            <tr><td>kinkaku-ji right &rarr; middle</td><td>94</td><td>0.94</td></tr>
+          </table>
+        </div>
+        <p class="part-answer">
+          A few wrong matches get through, like the Zion matches from the near rock ledge to the
+          cloud and three on the close branches in Kinkaku-ji. SF keeps the fewest because its
+          repeated windows fail the ratio test.
+        </p>
+      </section>
+
+      <!-- ============================ B.4 ============================ -->
+      <section id="part-b4">
+        <div class="part-heading">
+          <span class="part-chip">PART B.4</span>
+          <span class="part-title">RANSAC and automatic mosaics</span>
+        </div>
+        <p class="part-answer">
+          4-point RANSAC picks 4 random matches, computes the exact H from them and counts how
+          many matches land within 2 px under that H. After 1,000 tries the largest inlier set
+          wins, and the final H is least squares over those inliers.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames" style="flex-direction:column">
+            <div class="result-tile"><div class="frame fit"><img src="img/b4_zion_left_inliers.jpg" alt="zion left to middle ransac inliers"></div><div class="result-label">zion left &rarr; middle<br><b>87 inliers</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/b4_sf_left_inliers.jpg" alt="sf left to right ransac inliers"></div><div class="result-label">sf left &rarr; right<br><b>40 inliers</b></div></div>
+            <div class="result-tile"><div class="frame fit"><img src="img/b4_kinkaku_right_inliers.jpg" alt="kinkaku-ji right to middle ransac inliers"></div><div class="result-label">kinkaku-ji right &rarr; middle<br><b>76 inliers</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The Zion ledge matches and the Kinkaku-ji branch matches are rejected, since parallax
+          makes them disagree with the homography of the far scene.
+        </p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <tr><th>Pair</th><th>inliers</th><th>manual H error</th><th>automatic H error</th></tr>
+            <tr><td>zion left &rarr; middle</td><td>87 / 137</td><td>6.67 px</td><td>8.55 px</td></tr>
+            <tr><td>zion right &rarr; middle</td><td>91 / 110</td><td>3.86 px</td><td>5.32 px</td></tr>
+            <tr><td>sf left &rarr; right</td><td>40 / 45</td><td>2.11 px</td><td>3.78 px</td></tr>
+            <tr><td>kinkaku-ji left &rarr; middle</td><td>96 / 117</td><td>3.62 px</td><td>5.43 px</td></tr>
+            <tr><td>kinkaku-ji right &rarr; middle</td><td>76 / 94</td><td>2.82 px</td><td>4.46 px</td></tr>
+          </table>
+        </div>
+        <p class="part-caption">
+          Error is the mean distance between my Part A clicked points after mapping through each H.
+        </p>
+        <p class="part-answer">
+          The manual H was fit to these exact clicks, so it has an advantage, but the automatic H
+          is only 1.5 to 2 px further on every pair.
+        </p>
+
+        <div class="sub-heading">Manual vs automatic</div>
+        <p class="part-answer">
+          Both use the two-band blending from A.4.
+        </p>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/b4_zion_manual.jpg" alt="zion mosaic from clicked points"></div><div class="result-label">zion<br><b>manual</b></div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/b4_zion_auto.jpg" alt="zion mosaic automatic"></div><div class="result-label">zion<br><b>automatic</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/b4_sf_manual.jpg" alt="sf mosaic from clicked points"></div><div class="result-label">sf<br><b>manual</b></div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/b4_sf_auto.jpg" alt="sf mosaic automatic"></div><div class="result-label">sf<br><b>automatic</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="film-strip wide" style="margin-top:14px">
+          <div class="perf"></div>
+          <div class="frames even">
+            <div class="result-tile"><div class="frame fit"><img src="img/b4_kinkaku_manual.jpg" alt="kinkaku-ji mosaic from clicked points"></div><div class="result-label">kinkaku-ji<br><b>manual</b></div></div>
+            <div class="result-tile chosen"><div class="frame fit"><img src="img/b4_kinkaku_auto.jpg" alt="kinkaku-ji mosaic automatic"></div><div class="result-label">kinkaku-ji<br><b>automatic</b></div></div>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <p class="part-answer">
+          The automatic mosaics match the manual ones with no ghosting. The borders differ
+          slightly because small differences in H grow at the far corners.
+        </p>
+        <p class="part-answer">
+          The coolest part was that no single step is reliable alone, but together they match
+          hand clicked points to within a couple of pixels.
         </p>
       </section>
 
